@@ -46,14 +46,13 @@ class KvServer : public raftKVRpcProctoc::kvServerRpc::Service {
   std::atomic<bool> m_stopping{false};
 
   // Your definitions here.
-  std::string m_serializedKVData;  // todo 锛?搴忓垪鍖栧悗鐨刱v鏁版嵁锛岀悊璁轰笂鍙互涓嶇敤锛屼絾鏄洰鍓嶆病鏈夋壘鍒扮壒鍒ソ鐨勬浛浠ｆ柟娉?
+  std::string m_serializedKVData;
   SkipList<std::string, std::string> m_skipList;
   std::unordered_map<std::string, std::string> m_kvDB;
 
   std::unordered_map<int, std::shared_ptr<LockQueue<Op> > > waitApplyCh;
-  // index(raft) -> chan  //锛燂紵锛熷瓧娈靛惈涔?  waitApplyCh鏄竴涓猰ap锛岄敭鏄痠nt锛屽€兼槸Op绫诲瀷鐨勭閬?
 
-  std::unordered_map<std::string, int> m_lastRequestId;  // clientid -> requestID  //涓€涓猭V鏈嶅姟鍣ㄥ彲鑳借繛鎺ュ涓猚lient
+  std::unordered_map<std::string, int> m_lastRequestId;
 
   // last SnapShot point , raftIndex
   int m_lastSnapShotRaftLogIndex;
@@ -98,7 +97,7 @@ class KvServer : public raftKVRpcProctoc::kvServerRpc::Service {
 
   void Get(const raftKVRpcProctoc::GetArgs *args,
            raftKVRpcProctoc::GetReply
-               *reply);  //灏?GetArgs 鏀逛负rpc璋冪敤鐨勶紝鍥犱负鏄繙绋嬪鎴风锛屽嵆鏈嶅姟鍣ㄥ畷鏈哄瀹㈡埛绔潵璇存槸鏃犳劅鐨?
+               *reply);
   std::string WrongLeaderErr();
   bool RequestReadIndex(int *readIndex);
   bool WaitApplied(int raftIndex);
@@ -111,17 +110,14 @@ class KvServer : public raftKVRpcProctoc::kvServerRpc::Service {
 
   bool ifRequestDuplicate(std::string ClientId, int RequestId);
 
-  // clerk 浣跨敤RPC杩滅▼璋冪敤
   void PutAppend(const raftKVRpcProctoc::PutAppendArgs *args, raftKVRpcProctoc::PutAppendReply *reply);
 
-  ////涓€鐩寸瓑寰卹aft浼犳潵鐨刟pplyCh
   void ReadRaftApplyCommandLoop();
 
   void ReadSnapShotToInstall(std::string snapshot);
 
   bool SendMessageToWaitChan(const Op &op, int raftIndex);
 
-  // 妫€鏌ユ槸鍚﹂渶瑕佸埗浣滃揩鐓э紝闇€瑕佺殑璇濆氨鍚憆aft涔嬩笅鍒朵綔蹇収
   void IfNeedToSendSnapShotCommand(int raftIndex, int proportion);
 
   // Handler the SnapShot from kv.rf.applyCh
@@ -137,7 +133,6 @@ class KvServer : public raftKVRpcProctoc::kvServerRpc::Service {
                    ::raftKVRpcProctoc::GetReply *response) override;
 
   /////////////////serialiazation start ///////////////////////////////
-  // notice 锛?func serialize
  private:
   friend class boost::serialization::access;
 
@@ -145,7 +140,7 @@ class KvServer : public raftKVRpcProctoc::kvServerRpc::Service {
   // & operator is defined similar to <<.  Likewise, when the class Archive
   // is a type of input archive the & operator is defined similar to >>.
   template <class Archive>
-  void serialize(Archive &ar, const unsigned int version)  //杩欓噷闈㈠啓闇€瑕佸簭鍒楄瘽鍜屽弽搴忓垪鍖栫殑瀛楁
+  void serialize(Archive &ar, const unsigned int version)
   {
     ar &m_serializedKVData;
 

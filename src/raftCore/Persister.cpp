@@ -6,11 +6,9 @@
 
 #include <iterator>
 
-// todo:浼氭秹鍙婂弽澶嶆墦寮€鏂囦欢鐨勬搷浣滐紝娌℃湁鑰冭檻濡傛灉鏂囦欢鍑虹幇闂浼氭€庝箞鍔烇紵锛?
 void Persister::Save(const std::string raftstate, const std::string snapshot) {
   std::lock_guard<std::mutex> lg(m_mtx);
   clearRaftStateAndSnapshot();
-  // 灏唕aftstate鍜宻napshot鍐欏叆鏈湴鏂囦欢
   m_raftStateOutStream << raftstate;
   m_snapshotOutStream << snapshot;
   m_raftStateOutStream.flush();
@@ -38,7 +36,6 @@ std::string Persister::ReadSnapshot() {
 
 void Persister::SaveRaftState(const std::string &data) {
   std::lock_guard<std::mutex> lg(m_mtx);
-  // 灏唕aftstate鍜宻napshot鍐欏叆鏈湴鏂囦欢
   clearRaftState();
   m_raftStateOutStream << data;
   m_raftStateOutStream.flush();

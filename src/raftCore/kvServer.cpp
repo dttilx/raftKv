@@ -31,7 +31,7 @@ void KvServer::DprintfKVDB() {
 }
 
 void KvServer::ExecuteAppendOpOnKVDB(Op op) {
-  // if op.IfDuplicate {   //get鐠囬攱鐪伴弰顖氬讲闁插秴顦查幍褑顢戦惃鍕剁礉閸ョ姵顒濋崣顖欎簰娑撳秶鏁ら崚銈咁槻
+
   //	return
   // }
   m_mtx.lock();
@@ -57,7 +57,6 @@ void KvServer::ExecuteGetOpOnKVDB(Op op, std::string *value, bool *exist) {
   *exist = false;
   if (m_skipList.search_element(op.Key, *value)) {
     *exist = true;
-    // *value = m_skipList.se //value瀹歌尙绮＄€瑰本鍨氱挧瀣偓闂寸啊
   }
   // if (m_kvDB.find(op.Key) != m_kvDB.end()) {
   //     *exist = true;
@@ -87,7 +86,6 @@ void KvServer::ExecutePutOpOnKVDB(Op op) {
   DprintfKVDB();
 }
 
-// 婢跺嫮鎮婇弶銉ㄥ殰clerk閻ㄥ嚕et RPC
 void KvServer::Get(const raftKVRpcProctoc::GetArgs *args, raftKVRpcProctoc::GetReply *reply) {
   Op op;
   op.Operation = "Get";
@@ -263,12 +261,9 @@ void KvServer::GetCommandFromRaft(ApplyMsg message) {
     if (op.Operation == "Append") {
       ExecuteAppendOpOnKVDB(op);
     }
-    //  kv.lastRequestId[op.ClientId] = op.RequestId  閸︹€ecutexxx閸戣姤鏆熼柌宀勬桨閺囧瓨鏌婇惃?
   }
-  //閸掓媽绻栭柌瀹瑅DB瀹歌尙绮￠崚鏈电稊娴滃棗鎻╅悡?
   if (m_maxRaftState != -1) {
     IfNeedToSendSnapShotCommand(message.CommandIndex, 9);
-    //婵″倹鐏塺aft閻ㄥ埐og婢额亜銇囬敍鍫濄亣娴滃孩瀵氱€规氨娈戝В鏂剧伐閿涘姘ㄩ幎濠傚煑娴ｆ粌鎻╅悡?
   }
 
   {
@@ -284,14 +279,10 @@ bool KvServer::ifRequestDuplicate(std::string ClientId, int RequestId) {
   std::lock_guard<std::mutex> lg(m_mtx);
   if (m_lastRequestId.find(ClientId) == m_lastRequestId.end()) {
     return false;
-    // todo :娑撳秴鐡ㄩ崷銊ㄧ箹娑撶寶lient鐏忓崬鍨卞?
   }
   return RequestId <= m_lastRequestId[ClientId];
 }
 
-// get閸滃ut//append閸╃柉顢戦惃鍕徔妤傛梻绐楃弧鈧弰顖欑瑝娑撯偓濡絿娈?
-// PutAppend閸︺劍鏁归崚鐨塧ft濞戝牊浼呮稊瀣乏閸╃柉顢戦敍灞藉徔妤傛柨鍤遍弫姝岊棓闂堛垹褰ч崚銈嗘煑閸愵亞鐡戦幀褝绱欓弰顖氭儊闁插秷顦敍?
-// get閸戣姤鏆╅弨璺哄煂raft濞戝牊浼呮稊瀣乏閸︻煉绱濋崶鐘靛煇get閻捖ょ彨閺勵垰鎯侀柌宥堫槵闁棄褰叉禒銉ュ晙閸╃柉顢?
 void KvServer::PutAppend(const raftKVRpcProctoc::PutAppendArgs *args, raftKVRpcProctoc::PutAppendReply *reply) {
   Op op;
   op.Operation = args->op();
@@ -324,7 +315,7 @@ void KvServer::PutAppend(const raftKVRpcProctoc::PutAppendArgs *args, raftKVRpcP
   }
   auto chForRaftIndex = waitApplyCh[raftIndex];
 
-  m_mtx.unlock();  //閻╁瓨甯寸憴锝夋敚閿涘瞼鐡戝鍛崲閸斺剝澧界悰灞界暚閹存劧绱濇稉宥堝厴娑撯偓閻╁瓨瀣侀柨浣虹搼瀵?
+  m_mtx.unlock();
 
   // timeout
   Op raftCommitOp;
@@ -336,9 +327,9 @@ void KvServer::PutAppend(const raftKVRpcProctoc::PutAppendArgs *args, raftKVRpcP
         m_me, m_me, raftIndex, &op.ClientId, op.RequestId, &op.Operation, &op.Key, &op.Value);
 
     if (ifRequestDuplicate(op.ClientId, op.RequestId)) {
-      reply->set_err(OK);  // 鐡掑懏妞傛禍?娴ｅ棗娲滄稉鐑樻Ц闁插秴顦查惃鍕嚞濮瑰偊绱濇潻鏂挎礀ok閿涘苯鐤勯梽鍛瑐鐏忚京鐣诲▽鈩冩箒鐡掑懏妞傞敍灞芥躬閻喐顒滈幍褑顢戦惃鍕閸婃瑤绡冪憰浣稿灲閺傤厽妲搁崥锕傚櫢婢?
+      reply->set_err(OK);
     } else {
-      reply->set_err(WrongLeaderErr());  ///鏉╂瑩鍣锋潻鏂挎礀鏉╂瑤閲滈惃鍕窗閻ㄥ嫯顔€clerk闁插秵鏌婄亸婵婄槸
+      reply->set_err(WrongLeaderErr());
     }
   } else {
     DPrintf(
@@ -346,7 +337,6 @@ void KvServer::PutAppend(const raftKVRpcProctoc::PutAppendArgs *args, raftKVRpcP
         "ClientId %s, RequestId %d, Opreation %s, Key :%s, Value :%s",
         m_me, m_me, raftIndex, &op.ClientId, op.RequestId, &op.Operation, &op.Key, &op.Value);
     if (raftCommitOp.ClientId == op.ClientId && raftCommitOp.RequestId == op.RequestId) {
-      //閸欘垵鍏橀崣鎴犳晸leader閻ㄥ嫬褰夐弴鏉戭嚤閼峰瓨妫╄箛妤勵潶鐟曞棛娲婇敍灞芥礈濮濄倕绻€妞ょ粯顥呴弻?
       reply->set_err(OK);
     } else {
       reply->set_err(WrongLeaderErr());
@@ -361,7 +351,6 @@ void KvServer::PutAppend(const raftKVRpcProctoc::PutAppendArgs *args, raftKVRpcP
 
 void KvServer::ReadRaftApplyCommandLoop() {
   while (!m_stopping.load()) {
-    //婵″倹鐏夐崣顏呮惙娴ｆ竵pplyChan娑撳秶鏁ら幏鍧楁敚閿涘苯娲滄稉绡磒plyChan閼奉亜绻佺敮锕傛敚
     auto message = applyChan->Pop();
     if (m_stopping.load()) {
       break;
@@ -378,9 +367,6 @@ void KvServer::ReadRaftApplyCommandLoop() {
   }
 }
 
-// raft浼氫笌persist灞備氦浜掞紝kvserver灞備篃浼氾紝鍥犱负kvserver灞傚紑濮嬬殑鏃跺€欓渶瑕佹仮澶峩vdb鐨勭姸鎬?
-// 鍏充簬蹇収raft灞備笌persist鐨勪氦浜掞細淇濆瓨kvserver浼犳潵鐨剆napshot锛涚敓鎴恖eaderInstallSnapshot RPC鐨勬椂鍊欎篃闇€瑕佽鍙杝napshot
-// 鍥犳snapshot鐨勫叿浣撴牸寮忔槸鐢眐vserver灞傛潵瀹氱殑锛宺aft鍙礋璐ｄ紶閫掕繖涓笢瑗?
 // snapShot閲岄潰鍖呭惈kvserver闇€瑕佺淮鎶ょ殑persist_lastRequestId 浠ュ強kvDB鐪熸淇濆瓨鐨勬暟鎹畃ersist_kvdb
 void KvServer::ReadSnapShotToInstall(std::string snapshot) {
   if (snapshot.empty()) {
@@ -392,8 +378,6 @@ void KvServer::ReadSnapShotToInstall(std::string snapshot) {
   //    r := bytes.NewBuffer(snapshot)
   //    d := labgob.NewDecoder(r)
   //
-  //    var persist_kvdb map[string]string  //閻炲棗绨茶箛顐ゅ弾
-  //    var persist_lastRequestId map[int64]int //韫囶偆鍙庢潻娆庨嚋娑撹桨绨＄紒瀛樺Б缁炬寧鈧傜閼峰瓨鈧?
   //
   //    if d.Decode(&persist_kvdb) != nil || d.Decode(&persist_lastRequestId) != nil {
   //                DPrintf("KVSERVER %d read persister got a problem!!!!!!!!!!",kv.me)
