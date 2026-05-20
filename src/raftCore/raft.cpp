@@ -339,24 +339,8 @@ void Raft::electionTimeOutTicker() {
     }
 
     if (std::chrono::duration<double, std::milli>(suitableSleepTime).count() > 1) {
-      // 鑾峰彇褰撳墠鏃堕棿鐐?
-      auto start = std::chrono::steady_clock::now();
-
       usleep(std::chrono::duration_cast<std::chrono::microseconds>(suitableSleepTime).count());
       // std::this_thread::sleep_for(suitableSleepTime);
-
-      // 鑾峰彇鍑芥暟杩愯缁撴潫鍚庣殑鏃堕棿鐐?
-      auto end = std::chrono::steady_clock::now();
-
-      // 璁＄畻鏃堕棿宸苟杈撳嚭缁撴灉锛堝崟浣嶄负姣锛?
-      std::chrono::duration<double, std::milli> duration = end - start;
-
-      // 浣跨敤ANSI鎺у埗搴忓垪灏嗚緭鍑洪鑹蹭慨鏀逛负绱壊
-      std::cout << "\033[1;35m electionTimeOutTicker();鍑芥暟璁剧疆鐫＄湢鏃堕棿涓? "
-                << std::chrono::duration_cast<std::chrono::milliseconds>(suitableSleepTime).count() << " 姣\033[0m"
-                << std::endl;
-      std::cout << "\033[1;35m electionTimeOutTicker();鍑芥暟瀹為檯鐫＄湢鏃堕棿涓? " << duration.count() << " 姣\033[0m"
-                << std::endl;
     }
 
     if (std::chrono::duration<double, std::milli>(m_lastResetElectionTime - wakeTime).count() > 0) {
@@ -596,7 +580,6 @@ void Raft::leaderHearBeatTicker() {
       usleep(1000 * HeartBeatTimeout);
       // std::this_thread::sleep_for(std::chrono::milliseconds(HeartBeatTimeout));
     }
-    static std::atomic<int32_t> atomicCount = 0;
 
     std::chrono::duration<signed long int, std::ratio<1, 1000000000>> suitableSleepTime{};
     std::chrono::system_clock::time_point wakeTime{};
@@ -607,25 +590,8 @@ void Raft::leaderHearBeatTicker() {
     }
 
     if (std::chrono::duration<double, std::milli>(suitableSleepTime).count() > 1) {
-      std::cout << atomicCount << "\033[1;35m leaderHearBeatTicker();鍑芥暟璁剧疆鐫＄湢鏃堕棿涓? "
-                << std::chrono::duration_cast<std::chrono::milliseconds>(suitableSleepTime).count() << " 姣\033[0m"
-                << std::endl;
-      // 鑾峰彇褰撳墠鏃堕棿鐐?
-      auto start = std::chrono::steady_clock::now();
-
       usleep(std::chrono::duration_cast<std::chrono::microseconds>(suitableSleepTime).count());
       // std::this_thread::sleep_for(suitableSleepTime);
-
-      // 鑾峰彇鍑芥暟杩愯缁撴潫鍚庣殑鏃堕棿鐐?
-      auto end = std::chrono::steady_clock::now();
-
-      // 璁＄畻鏃堕棿宸苟杈撳嚭缁撴灉锛堝崟浣嶄负姣锛?
-      std::chrono::duration<double, std::milli> duration = end - start;
-
-      // 浣跨敤ANSI鎺у埗搴忓垪灏嗚緭鍑洪鑹蹭慨鏀逛负绱壊
-      std::cout << atomicCount << "\033[1;35m leaderHearBeatTicker();鍑芥暟瀹為檯鐫＄湢鏃堕棿涓? " << duration.count()
-                << " 姣\033[0m" << std::endl;
-      ++atomicCount;
     }
 
     if (std::chrono::duration<double, std::milli>(m_lastResetHearBeatTime - wakeTime).count() > 0) {
