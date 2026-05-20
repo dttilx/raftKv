@@ -10,6 +10,44 @@ A C++20 Raft-based key-value storage project: Raft core, KV service, gRPC/protob
 - ReadIndex-style linearizable read path for `Get`.
 - Benchmark (`kv_bench`) and consistency check (`kv_consistency`) under `test/`.
 
+## Benchmarks (maintainer-measured)
+
+The tables below are **measured by the repository maintainer** on a **Tencent Cloud Ubuntu VM** running a **3-node** local cluster (`./bin/raftCoreRun -n 3 -f test.conf`, peers on `127.0.0.1` with consecutive ports, e.g. `15914–15916`). Load generator:
+
+```text
+./bin/kv_bench -c test.conf -t 8 -k 10000 -v 64 -w 10
+```
+
+Meaning: **8 threads**, key space **10 000**, value size **64 B**, **10 % Put / 90 % Get**. Figures are **indicative only** (your CPU, noisy neighbors, and tuning will differ).
+
+### Plan A — five rounds × **15 s** each
+
+After warm-up, **rounds 2–5** stayed in a narrow band; **errors = 0** on every round.
+
+| Metric | Observed (rounds 2–5) |
+|--------|------------------------|
+| **QPS** | **1 250.73 – 1 278.20** |
+| **Errors** | **0** |
+| **p50** | **~2.2 ms** (~2 200 µs) |
+| **Average** | **~6.3 – 6.4 ms** |
+| **p99** | **~35 – 36 ms** |
+
+**Takeaway:** Short bursts hold **~1.25k–1.28k QPS** with stable median latency and **~35–36 ms** tails on this VM.
+
+### Plan B — three rounds × **60 s** each
+
+Longer runs show **slight QPS decay** vs Plan A (GC, log growth, cache effects on a single VM); **errors = 0** for all rounds.
+
+| Round | Ops | QPS | Avg latency (µs) | p50 (µs) | p99 (µs) |
+|------:|----:|----:|-----------------:|---------:|---------:|
+| 1 | 69 343 | **1 155.72** | 6 921.8 | 2 194.0 | 39 487.6 |
+| 2 | 60 301 | **1 005.02** | 7 960.0 | 2 255.0 | 45 775.0 |
+| 3 | 59 635 | **993.92** | 8 048.0 | 2 300.0 | ~46 200* |
+
+\*Round 3 p99 was truncated in the terminal capture; order of magnitude matches round 2.
+
+**Takeaway:** **~1.0k–1.16k QPS** over 60 s windows, **0** benchmark errors; average latency drifts toward **~8 ms** while p50 stays **~2.2–2.3 ms**.
+
 ## Layout
 
 - `src/raftCore`: Raft core, persister, and KV server.
