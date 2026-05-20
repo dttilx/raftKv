@@ -1,0 +1,16 @@
+
+!bin/test.conf
+.idea
+bin
+cmake-build-debug
+cmake-build/
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+lib
+
+*.out
+*.a
+raftstatePersist*.txt
+snapshotPersist*.txt
