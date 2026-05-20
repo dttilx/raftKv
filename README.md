@@ -79,6 +79,35 @@ node2port=8002
 
 Production-style multi-process deployment would need separate binaries or launchers; the stock `raftCoreRun` is oriented around local fork + dynamic ports.
 
+## Ubuntu dependencies (typical)
+
+Adjust names if your distro differs:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential cmake pkg-config \
+  libgrpc++-dev libprotobuf-dev protobuf-compiler-grpc \
+  libboost-serialization-dev
+```
+
+Ensure `protoc` and `grpc_cpp_plugin` versions are compatible (same major gRPC/protobuf family).
+
+## Troubleshooting
+
+### Garbled purple logs: `123 leaderHearBeatTicker(); 鍑芥暟…`
+
+Older builds printed **every Raft timer sleep** using broken UTF-8 strings. That spam was **removed** in commit `3f1dc32`. If you still see it:
+
+1. `git pull`
+2. `rm -rf cmake-build bin lib` (or at least delete `bin/raftCoreRun`)
+3. Re-run the **Build** commands above so `raftCoreRun` is re-linked.
+
+The program was not necessarily “stuck”; timers run in a loop by design—the output was misleading debug noise.
+
+### Skip-list trace
+
+KV lookups can print verbose skip-list traces; they are **off** by default. To enable, build with e.g. `-DSKIP_LIST_TRACE=1` on the compiler command line.
+
 ## Notes
 
 - Runtime files `raftstatePersist*.txt`, `snapshotPersist*.txt` are git-ignored.

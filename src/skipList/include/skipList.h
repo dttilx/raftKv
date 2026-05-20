@@ -28,6 +28,19 @@
 
 #define STORE_FILE "store/dumpFile"
 
+// Hot-path logging off by default (Get/Put go through search_element very often).
+#ifndef SKIP_LIST_TRACE
+#define SKIP_LIST_TRACE 0
+#endif
+#if SKIP_LIST_TRACE
+#define SL_TRACE(expr) \
+  do {                 \
+    expr;              \
+  } while (0)
+#else
+#define SL_TRACE(expr) ((void)0)
+#endif
+
 static std::string delimiter = ":";
 
 // Class template to implement node
@@ -200,7 +213,7 @@ int SkipList<K, V>::insert_element(const K key, const V value) {
 
   // if current node have key equal to searched key, we get it
   if (current != NULL && current->get_key() == key) {
-    std::cout << "key: " << key << ", exists" << std::endl;
+    SL_TRACE(std::cout << "key: " << key << ", exists" << std::endl);
     _mtx.unlock();
     return 1;
   }
@@ -227,7 +240,7 @@ int SkipList<K, V>::insert_element(const K key, const V value) {
       inserted_node->forward[i] = update[i]->forward[i];
       update[i]->forward[i] = inserted_node;
     }
-    std::cout << "Successfully inserted key:" << key << ", value:" << value << std::endl;
+    SL_TRACE(std::cout << "Successfully inserted key:" << key << ", value:" << value << std::endl);
     _element_count++;
   }
   _mtx.unlock();
@@ -237,16 +250,16 @@ int SkipList<K, V>::insert_element(const K key, const V value) {
 // Display skip list
 template <typename K, typename V>
 void SkipList<K, V>::display_list() {
-  std::cout << "\n*****Skip List*****"
-            << "\n";
+  SL_TRACE(std::cout << "\n*****Skip List*****"
+                     << "\n");
   for (int i = 0; i <= _skip_list_level; i++) {
     Node<K, V> *node = this->_header->forward[i];
-    std::cout << "Level " << i << ": ";
+    SL_TRACE(std::cout << "Level " << i << ": ");
     while (node != NULL) {
-      std::cout << node->get_key() << ":" << node->get_value() << ";";
+      SL_TRACE(std::cout << node->get_key() << ":" << node->get_value() << ";");
       node = node->forward[i];
     }
-    std::cout << std::endl;
+    SL_TRACE(std::cout << std::endl);
   }
 }
 
@@ -371,7 +384,7 @@ void SkipList<K, V>::delete_element(K key) {
       _skip_list_level--;
     }
 
-    std::cout << "Successfully deleted key " << key << std::endl;
+    SL_TRACE(std::cout << "Successfully deleted key " << key << std::endl);
     delete current;
     _element_count--;
   }
@@ -414,7 +427,7 @@ level 0         1    4   9 10         30   40    50+-->60      70       100
 */
 template <typename K, typename V>
 bool SkipList<K, V>::search_element(K key, V &value) {
-  std::cout << "search_element-----------------" << std::endl;
+  SL_TRACE(std::cout << "search_element-----------------" << std::endl);
   Node<K, V> *current = _header;
 
   // start from highest level of skip list
@@ -430,11 +443,11 @@ bool SkipList<K, V>::search_element(K key, V &value) {
   // if current node have key equal to searched key, we get it
   if (current and current->get_key() == key) {
     value = current->get_value();
-    std::cout << "Found key: " << key << ", value: " << current->get_value() << std::endl;
+    SL_TRACE(std::cout << "Found key: " << key << ", value: " << current->get_value() << std::endl);
     return true;
   }
 
-  std::cout << "Not Found Key:" << key << std::endl;
+  SL_TRACE(std::cout << "Not Found Key:" << key << std::endl);
   return false;
 }
 
