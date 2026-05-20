@@ -27,7 +27,16 @@ A C++20 Raft-based key-value storage project. The repository contains a Raft cor
 
 The project expects CMake, a C++20 compiler, protobuf, gRPC, Boost serialization, Muduo, pthread, and dl.
 
+Both `src/raftRpcPro/raftRPC.proto` and `kvServerRPC.proto` must contain:
+
+```text
+option cc_generic_services = false;
+```
+
+Without it, `protoc` + `grpc_cpp_plugin` fails with *generic services* errors.
+
 ```bash
+rm -rf cmake-build
 cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build cmake-build -j
 ```

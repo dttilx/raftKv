@@ -16,14 +16,17 @@ foreach(PROTO_FILE ${PROTO_FILES})
   set(GRPC_SRC ${GENERATED_DIR}/${PROTO_NAME}.grpc.pb.cc)
   set(GRPC_HDR ${GENERATED_DIR}/${PROTO_NAME}.grpc.pb.h)
 
+  # cpp 与 grpc 分两步生成；proto 须含 option cc_generic_services = false;
   add_custom_command(
       OUTPUT ${PROTO_SRC} ${PROTO_HDR} ${GRPC_SRC} ${GRPC_HDR}
       COMMAND $<TARGET_FILE:protobuf::protoc>
-      ARGS
           --cpp_out=${GENERATED_DIR}
+          -I${CMAKE_CURRENT_SOURCE_DIR}
+          ${PROTO_FILE}
+      COMMAND $<TARGET_FILE:protobuf::protoc>
           --grpc_out=${GENERATED_DIR}
           --plugin=protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>
-          -I ${CMAKE_CURRENT_SOURCE_DIR}
+          -I${CMAKE_CURRENT_SOURCE_DIR}
           ${PROTO_FILE}
       DEPENDS ${PROTO_FILE}
       VERBATIM
