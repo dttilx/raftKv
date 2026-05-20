@@ -104,6 +104,12 @@ Older builds printed **every Raft timer sleep** using broken UTF-8 strings. That
 
 The program was not necessarily “stuck”; timers run in a loop by design—the output was misleading debug noise.
 
+### `RequestVote` / `failed to connect to all addresses` (gRPC code 14) at startup
+
+Earlier `raftCoreRun` called `sleep(1)` in the **parent** after each `fork`, so child 0 started **one to two seconds** before the last child. Node 0 then ran elections and opened gRPC client calls before peer `N-1` had called `AddListeningPort`. Fix: fork children without that delay and stagger `KvServer::Start()` inside each child so higher-index peers bind first (`raftKvDB.cpp`). Pull latest `main` and rebuild.
+
+If you still see a few transient failures on a very slow host, wait a second and watch for steady `grpc server started` lines for all nodes; Raft retries elections.
+
 ### Skip-list trace
 
 KV lookups can print verbose skip-list traces; they are **off** by default. To enable, build with e.g. `-DSKIP_LIST_TRACE=1` on the compiler command line.
