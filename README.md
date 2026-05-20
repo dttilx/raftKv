@@ -81,39 +81,65 @@ cmake --build cmake-build -j
 
 ## 运行
 
-`raftCoreRun` 会**生成** `test.conf`（`127.0.0.1` 上随机端口），再为每个节点 `fork` 子进程：
+### 推荐：固定端口 + 脚本（本地 / CI 共用）
+
+依赖 **Linux**，在项目根目录：
+
+```bash
+chmod +x scripts/*.sh
+./scripts/cluster_up.sh          # 使用 deploy/test.conf.fixed → test.conf，端口 19001–19003
+./bin/kv_consistency -c test.conf -k 1000 -r 1
+./scripts/cluster_down.sh
+```
+
+一键冒烟（起集群 → 一致性 → 短压测 `errors=0` → 关集群）：
+
+```bash
+./scripts/smoke.sh
+```
+
+杀单节点后再测一致性：
+
+```bash
+./scripts/smoke_chaos.sh
+```
+
+`raftCoreRun` 使用已有配置（不随机覆盖端口）：
+
+```bash
+cp deploy/test.conf.fixed test.conf
+./bin/raftCoreRun -f test.conf -u
+```
+
+### 开发模式：随机端口
+
+`raftCoreRun` 会**生成** `test.conf`（`127.0.0.1` 上随机端口），再 `fork` 子进程：
 
 ```bash
 ./bin/raftCoreRun -n 3 -f test.conf
 ```
 
-**另开终端**，在同一目录（保证读到同一份 `test.conf`）：
+**另开终端**，在同一目录：
 
 ```bash
 ./bin/callerMain
 ```
 
-停止：在该进程终端 `Ctrl+C`，或 `pkill -f raftCoreRun`。
+停止：`./scripts/cluster_down.sh`，或 `Ctrl+C` / `pkill -f raftCoreRun`。
 
-集群已启动后的压测 / 一致性校验：
+压测 / 一致性（集群已启动后）：
 
 ```bash
 ./bin/kv_consistency -c test.conf -k 1000 -r 3
 ./bin/kv_bench -c test.conf -t 8 -s 15 -k 10000 -v 64 -w 10
 ```
 
-### 可选：手写固定 `test.conf`
+### CI
 
-```text
-node0ip=127.0.0.1
-node0port=8000
-node1ip=127.0.0.1
-node1port=8001
-node2ip=127.0.0.1
-node2port=8002
-```
+`push` / `PR` 触发 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：编译 → `./scripts/smoke.sh` → `./scripts/smoke_chaos.sh`。  
+CI 内短压测只断言 **`errors=0`**，`qps` 仅打印、不做门槛（共享 runner 上 QPS 波动大）。
 
-生产形态多机部署通常需要每节点独立进程与启动编排；仓库自带 `raftCoreRun` 面向 **本机 fork + 随机端口** 的快速演示。
+生产形态多机部署通常需要每节点独立进程与启动编排；当前脚本面向 **本机 fork + 固定端口** 的可复现演示与自动化测试。
 
 ## Ubuntu 依赖示例
 

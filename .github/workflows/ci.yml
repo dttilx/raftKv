@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, 'feat/**']
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgrpc++-dev libprotobuf-dev protobuf-compiler-grpc \
+            libboost-serialization-dev netcat-openbsd
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build cmake-build -j"$(nproc)"
+
+      - name: Smoke test (consistency + short bench)
+        run: |
+          chmod +x scripts/*.sh
+          export RAFTKV_CLEAN_PERSIST=1
+          export RAFTKV_SMOKE_BENCH=1
+          export RAFTKV_CONSISTENCY_KEYS=300
+          export RAFTKV_BENCH_SECONDS=5
+          ./scripts/smoke.sh
+
+      - name: Chaos smoke (kill one node)
+        run: |
+          export RAFTKV_CLEAN_PERSIST=1
+          ./scripts/smoke_chaos.sh
+
+      - name: Upload cluster log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cluster-log
+          path: logs/cluster.log
+          if-no-files-found: ignore

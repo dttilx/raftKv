@@ -15,3 +15,5 @@ lib
 *.a
 raftstatePersist*.txt
 snapshotPersist*.txt
+.cluster.pid
+logs/

@@ -1,0 +1,7 @@
+# Fixed 3-node cluster for scripts/CI (127.0.0.1:19001-19003)
+node0ip=127.0.0.1
+node0port=19001
+node1ip=127.0.0.1
+node1port=19002
+node2ip=127.0.0.1
+node2port=19003
