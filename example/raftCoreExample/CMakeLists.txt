@@ -2,7 +2,7 @@ set(SRC_LIST raftKvDB.cpp)
 
 
 add_executable(raftCoreRun ${SRC_LIST})
-target_link_libraries(raftCoreRun skip_list_on_raft protobuf::libprotobuf muduo_net muduo_base pthread)
+target_link_libraries(raftCoreRun skip_list_on_raft protobuf::libprotobuf pthread)
 
 #################################
 

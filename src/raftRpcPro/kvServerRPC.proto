@@ -39,34 +39,9 @@ message PutAppendReply  {
 }
 
 
-//只有raft节点之间才会涉及rpc通信
+// KV 服务对外 RPC（Clerk -> KvServer）
 service kvServerRpc
 {
-  //PutAppend(args *PutAppendArgs, reply *PutAppendReply)
-  //Get(args *GetArgs, reply *GetReply)
-
   rpc PutAppend(PutAppendArgs) returns(PutAppendReply);
   rpc Get (GetArgs) returns (GetReply);
 }
-// message ResultCode
-// {
-//     int32 errcode = 1;
-//     bytes errmsg = 2;
-// }
-
-// message GetFriendsListRequest  //请求，响应
-// {
-//     uint32 userid = 1;
-// }
-
-// message GetFriendsListResponse  //请求，响应
-// {
-//     ResultCode result = 1;
-//     repeated bytes friends = 2;
-// }
-
-// // 好友模块
-// service FiendServiceRpc  //具体的服务模块和服务方法
-// {
-//     rpc GetFriendsList(GetFriendsListRequest) returns(GetFriendsListResponse);
-// }

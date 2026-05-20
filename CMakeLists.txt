@@ -46,13 +46,11 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 # 设置项目库文件输出的路径
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
-# 设置项目编译头文件搜索路径 -I
-# 目前可能存在路径污染的问题，需要进一步解决
+# 生成目录优先于源码目录，避免误用历史提交的 *.pb.h
+include_directories(${CMAKE_BINARY_DIR}/src/raftRpcPro/generated)
 include_directories(${PROJECT_SOURCE_DIR}/src/common/include)
 include_directories(${PROJECT_SOURCE_DIR}/example)
 include_directories(${PROJECT_SOURCE_DIR}/src/raftCore/include)
-include_directories(${PROJECT_SOURCE_DIR}/src/raftRpcPro/include)
-include_directories(${CMAKE_BINARY_DIR}/src/raftRpcPro/generated)
 include_directories(${PROJECT_SOURCE_DIR}/src/raftClerk/include)
 include_directories(${PROJECT_SOURCE_DIR}/src/skipList/include)
 
@@ -68,7 +66,7 @@ add_subdirectory(test)
 
 add_library(skip_list_on_raft STATIC ${src_common} ${src_raftCore} ${src_raftRpcPro})
 add_dependencies(skip_list_on_raft generate_raft_rpc_protos)
-target_link_libraries(skip_list_on_raft muduo_net muduo_base pthread dl gRPC::grpc++ protobuf::libprotobuf boost_serialization)
+target_link_libraries(skip_list_on_raft pthread dl gRPC::grpc++ protobuf::libprotobuf boost_serialization)
 # 添加格式化目标 start
 # from : https://blog.csdn.net/guotianqing/article/details/121661067
 

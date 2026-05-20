@@ -1,39 +1,37 @@
 # KVstorageBaseRaft-cpp
 
-A C++20 Raft-based key-value storage project. The repository contains a Raft core, a KV service, gRPC/protobuf RPC definitions, a client clerk, examples, benchmark tools, and scripts for local cluster testing.
+A C++20 Raft-based key-value storage project: Raft core, KV service, gRPC/protobuf RPC, client clerk, examples, and benchmarks.
 
 ## Features
 
 - Raft leader election, log replication, commit/apply loop, persistence, and snapshot support.
 - KV operations over Raft: `Get`, `Put`, and `Append`.
-- gRPC/protobuf based RPC layer.
+- gRPC/protobuf RPC layer.
 - ReadIndex-style linearizable read path for `Get`.
-- Benchmark and consistency check programs under `test/`.
-- Shell scripts for cluster start/stop, fault injection, network partition testing, snapshot testing, and perf/flamegraph workflows.
+- Benchmark (`kv_bench`) and consistency check (`kv_consistency`) under `test/`.
 
 ## Layout
 
 - `src/raftCore`: Raft core, persister, and KV server.
-- `src/raftRpcPro`: protobuf definitions and generated RPC code.
+- `src/raftRpcPro`: `.proto` only; `.pb.cc` / `.grpc.pb.*` are **generated** under `cmake-build/src/raftRpcPro/generated/` (not committed).
 - `src/raftClerk`: client-side clerk and RPC utilities.
 - `src/common`: shared config and utility code.
-- `src/skipList`: in-memory skip list used by the KV state machine.
-- `example`: runnable examples.
-- `test`: correctness checks and benchmark programs.
-- `scripts`: helper scripts for build, cluster, fault, and performance tests.
+- `src/skipList/include`: header-only skip list for the KV state machine.
+- `example`: `raftCoreRun` (cluster entry) and `callerMain` client sample.
+- `test`: `kv_consistency`, `kv_bench`.
 - `docs`: architecture and design notes.
 
 ## Build
 
-The project expects CMake, a C++20 compiler, protobuf, gRPC, Boost serialization, Muduo, pthread, and dl.
+Dependencies: CMake ≥ 3.22, C++20, **protobuf**, **gRPC**, **Boost** (serialization), **pthread**, **dl**. **Muduo is not used** by the current code path.
 
-Both `src/raftRpcPro/raftRPC.proto` and `kvServerRPC.proto` must contain:
+Each `src/raftRpcPro/*.proto` must contain:
 
 ```text
 option cc_generic_services = false;
 ```
 
-Without it, `protoc` + `grpc_cpp_plugin` fails with *generic services* errors.
+Otherwise `grpc_cpp_plugin` fails with generic-service errors.
 
 ```bash
 rm -rf cmake-build
@@ -41,11 +39,34 @@ cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build cmake-build -j
 ```
 
-Build outputs are configured to go to `bin/` and `lib/`.
+Outputs: executables in `bin/`, static libs in `lib/`.
 
 ## Run
 
-Prepare a node config file like `bin/test.conf` with entries in this style:
+`raftCoreRun` **generates** `test.conf` (random ports on 127.0.0.1), then forks one process per node:
+
+```bash
+./bin/raftCoreRun -n 3 -f test.conf
+```
+
+In another terminal (same directory so `test.conf` matches):
+
+```bash
+./bin/callerMain
+```
+
+Stop: `Ctrl+C` or `pkill -f raftCoreRun`.
+
+To run benchmarks after the cluster is up:
+
+```bash
+./bin/kv_consistency -c test.conf -k 1000 -r 3
+./bin/kv_bench -c test.conf -t 8 -s 15 -k 10000 -v 64 -w 10
+```
+
+### Optional: fixed `test.conf`
+
+You can hand-write:
 
 ```text
 node0ip=127.0.0.1
@@ -56,30 +77,10 @@ node2ip=127.0.0.1
 node2port=8002
 ```
 
-Common helper scripts:
-
-```bash
-bash scripts/cluster_start.sh
-bash scripts/cluster_stop.sh
-bash scripts/run_raft_correctness.sh
-bash scripts/run_snapshot_suite.sh
-bash scripts/workload_bench.sh
-```
-
-## Tests And Benchmarks
-
-- `test/kv_consistency.cpp`: writes deterministic key/value data and verifies repeated reads.
-- `test/kv_bench.cpp`: runs concurrent `Get`/`Put` workloads and reports QPS plus latency percentiles.
-
-Example:
-
-```bash
-./bin/kv_consistency -c bin/test.conf -k 1000 -r 3
-./bin/kv_bench -c bin/test.conf -t 8 -s 15 -k 10000 -v 64 -w 10
-```
+Production-style multi-process deployment would need separate binaries or launchers; the stock `raftCoreRun` is oriented around local fork + dynamic ports.
 
 ## Notes
 
-- Runtime persistence files named `raftstatePersist*.txt` and `snapshotPersist*.txt` are ignored by git.
-- Build directories such as `cmake-build/` and `build/` are ignored by git.
-- Some legacy source comments may still contain mojibake and can be cleaned incrementally without changing behavior.
+- Runtime files `raftstatePersist*.txt`, `snapshotPersist*.txt` are git-ignored.
+- Build dirs `cmake-build/`, `build/` and `bin/`, `lib/` are git-ignored.
+- Some legacy comments contain mojibake; they can be cleaned without behavior changes.
