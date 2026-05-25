@@ -171,10 +171,20 @@ sudo apt-get install -y build-essential cmake pkg-config \
 
 跳表热路径日志默认关闭。需要时用编译选项加入 `-DSKIP_LIST_TRACE=1`。
 
+## 清理本地产物
+
+构建目录、运行生成的 `test.conf`、持久化文件等（一级垃圾）可一键删除：
+
+```bash
+chmod +x scripts/*.sh
+./scripts/clean.sh
+cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build cmake-build -j
+```
+
 ## 说明
 
-- 运行产生的 `raftstatePersist*.txt`、`snapshotPersist*.txt` 已 `.gitignore`。
-- `cmake-build/`、`build/`、`bin/`、`lib/` 已忽略。
+- 上述路径均已写入 `.gitignore`，不应提交到 Git。
 
 ---
 

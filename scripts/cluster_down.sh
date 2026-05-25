@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# =============================================================================
+# cluster_down.sh — 停止集群
+# 按 .cluster.pid 结束父进程，pkill raftCoreRun，并按 test.conf 端口释放监听。
+# 用法：./scripts/cluster_down.sh
+# =============================================================================
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 

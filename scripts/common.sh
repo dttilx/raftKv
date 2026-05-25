@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Shared helpers for cluster scripts.
+# =============================================================================
+# common.sh — 集群脚本公共库
+# 被 cluster_up/down、wait_ready、smoke、bench_ci、smoke_chaos 等 source。
+# 提供：项目根路径、test.conf 路径、PID/日志路径、从 conf 解析 node*port。
+# 环境变量：RAFTKV_CONF、RAFTKV_FIXED_CONF、RAFTKV_PID_FILE、RAFTKV_LOG_DIR
+# =============================================================================
 set -euo pipefail
 
 RAFTKV_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

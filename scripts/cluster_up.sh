@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# =============================================================================
+# cluster_up.sh — 启动三节点集群（固定端口）
+# 1) cluster_down 清残留  2) 可选删 persist  3) 拷贝 deploy/test.conf.fixed → test.conf
+# 4) 后台 raftCoreRun -f test.conf -u  5) wait_ready 等待端口与选举
+# 用法：./scripts/cluster_up.sh
+# 环境变量：RAFTKV_CLEAN_PERSIST=1 启动前清空持久化文件
+# =============================================================================
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 

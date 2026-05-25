@@ -1,19 +1,23 @@
-
-!bin/test.conf
+# --- IDE / 本地工具 ---
 .cursor/
 .idea
-bin
-cmake-build-debug
+.run/
+
+# --- 构建产物（一级：可随时删，重新 cmake --build）---
+bin/
+lib/
 cmake-build/
+cmake-build-debug/
 build/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-lib
-
 *.out
 *.a
-raftstatePersist*.txt
-snapshotPersist*.txt
+
+# --- 集群运行态（一级：脚本或 clean.sh 清理）---
+test.conf
 .cluster.pid
 logs/
+raftstatePersist*.txt
+snapshotPersist*.txt

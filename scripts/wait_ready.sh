@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# =============================================================================
+# wait_ready.sh — 等待集群就绪
+# 对 test.conf 中各节点端口做 TCP 探测（nc 或 /dev/tcp），全通后再等待选举稳定。
+# 由 cluster_up.sh 调用；失败 exit 1。
+# 环境变量：RAFTKV_WAIT_SECS（默认30）、RAFTKV_ELECTION_PAUSE（默认3秒）
+# =============================================================================
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 

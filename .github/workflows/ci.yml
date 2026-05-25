@@ -1,3 +1,5 @@
+# GitHub Actions：Ubuntu 编译 → scripts/smoke.sh → scripts/smoke_chaos.sh
+# 与本地 ./scripts/smoke.sh 同源，保证 push/PR 自动门禁。
 name: CI
 
 on:

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Short bench for CI: assert errors=0; print QPS (no hard QPS gate).
+# =============================================================================
+# bench_ci.sh — CI 用短压测（需集群已启动且 test.conf 有效）
+# 运行 kv_bench，断言 errors=0；qps 仅打印，不作为失败条件。
+# 通常由 smoke.sh 调用；也可在 cluster_up 后单独执行。
+# 环境变量：RAFTKV_BENCH_THREADS、RAFTKV_BENCH_SECONDS、RAFTKV_BENCH_KEYS
+# =============================================================================
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
