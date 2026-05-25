@@ -1,0 +1,52 @@
+# 定时压测：与 README 同参（8 线程 × 15s）。失败条件仅 errors!=0；QPS/延迟写入 artifact 供查阅。
+name: Bench Nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgrpc++-dev libprotobuf-dev protobuf-compiler-grpc \
+            libboost-serialization-dev netcat-openbsd
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build cmake-build -j"$(nproc)"
+
+      - name: Run README bench (15s)
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/bench_nightly.sh | tee bench-nightly.log
+
+      - name: Job summary
+        if: always()
+        run: |
+          if [[ -f logs/bench-nightly.txt ]]; then
+            echo '### Bench Nightly (GitHub runner)' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -20 logs/bench-nightly.txt >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload bench output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-nightly-${{ github.run_id }}
+          path: |
+            logs/bench-nightly.txt
+            bench-nightly.log
+          if-no-files-found: ignore

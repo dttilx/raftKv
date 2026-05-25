@@ -1,5 +1,8 @@
 # KVstorageBaseRaft-cpp
 
+[![CI](https://github.com/dttilx/raftKv/actions/workflows/ci.yml/badge.svg)](https://github.com/dttilx/raftKv/actions/workflows/ci.yml)
+[![Bench Nightly](https://github.com/dttilx/raftKv/actions/workflows/bench-nightly.yml/badge.svg)](https://github.com/dttilx/raftKv/actions/workflows/bench-nightly.yml)
+
 基于 **C++20** 的 Raft 共识 + 分布式 KV 示例工程：Raft 核心、KV 服务、**gRPC / protobuf** RPC、客户端 Clerk、示例与压测工具。
 
 ## 功能概要
@@ -10,12 +13,22 @@
 - 读路径：`Get` 采用 **ReadIndex 风格** 的线性一致读（见 `docs/一致性读流程.md`）。
 - 工具：`test/kv_bench` 压测、`test/kv_consistency` 一致性校验。
 
-## 压测数据（维护者实测）
+## 压测数据
 
-下列数据为**仓库维护者在腾讯云 Ubuntu 云主机**上，使用本仓库 **`./bin/raftCoreRun -n 3 -f test.conf` 启动的三节点本机集群**（节点 `127.0.0.1` 连续端口，例如 `15914–15916`）实测得到；压测命令为：
+### 定时压测（GitHub Actions）
+
+每周日在 GitHub Ubuntu runner 上自动跑与下文**相同参数**的 15 s 压测（[`bench-nightly.yml`](.github/workflows/bench-nightly.yml)）：
+
+- 查看结果：**[Actions → Bench Nightly](https://github.com/dttilx/raftKv/actions/workflows/bench-nightly.yml)** → 最新 Run → **Summary** 或下载 **bench-nightly** 附件。
+- 门禁：仅 **`errors=0`**；QPS / p50 / p99 随 runner 性能波动，**不与下方云机数值直接对比**。
+- 本地/CI 同参手动跑：`./scripts/bench_nightly.sh`（需先 `cluster_up` 或由脚本自动启停）。
+
+### 维护者云机实测（历史参考）
+
+下列为**腾讯云 Ubuntu 云主机**上实测（旧版随机端口集群；现推荐 `./scripts/cluster_up.sh` + 固定 `19001–19003`）。压测命令：
 
 ```text
-./bin/kv_bench -c test.conf -t 8 -k 10000 -v 64 -w 10
+./bin/kv_bench -c test.conf -t 8 -s 15 -k 10000 -v 64 -w 10
 ```
 
 含义：**8 线程**、key 空间 **10000**、value **64 字节**、**10% Put / 90% Get**。数值随 CPU、机器负载与参数变化，**仅供参考**。
@@ -134,10 +147,14 @@ cp deploy/test.conf.fixed test.conf
 ./bin/kv_bench -c test.conf -t 8 -s 15 -k 10000 -v 64 -w 10
 ```
 
-### CI
+### CI 与定时任务
 
-`push` / `PR` 触发 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：编译 → `./scripts/smoke.sh` → `./scripts/smoke_chaos.sh`。  
-CI 内短压测只断言 **`errors=0`**，`qps` 仅打印、不做门槛（共享 runner 上 QPS 波动大）。
+| 工作流 | 触发 | 内容 |
+|--------|------|------|
+| [**CI**](.github/workflows/ci.yml) | `push` / `PR` | 编译 → `smoke.sh`（一致性 + 5s 压测）→ `smoke_chaos.sh` |
+| [**Bench Nightly**](.github/workflows/bench-nightly.yml) | 每周日 UTC 03:00 / 手动 **Run workflow** | 编译 → `bench_nightly.sh`（8 线程 × **15 s**，README 同参） |
+
+PR 门禁以 **CI** 为准；**Bench Nightly** 用于跟踪长跑 QPS/延迟趋势，失败仅当 `errors≠0`。
 
 生产形态多机部署通常需要每节点独立进程与启动编排；当前脚本面向 **本机 fork + 固定端口** 的可复现演示与自动化测试。
 
