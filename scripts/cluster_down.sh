@@ -10,15 +10,18 @@ source "$(dirname "$0")/common.sh"
 if [[ -f "$PID_FILE" ]]; then
   pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   if [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null; then
-    kill "$pid" 2>/dev/null || true
+    # Kill the whole process group (parent + forked children). Killing only the
+    # parent leaves orphan raftCoreRun children holding 19001/19002/19003.
+    kill -TERM -- "-${pid}" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
     sleep 0.5
-    kill -9 "$pid" 2>/dev/null || true
+    kill -KILL -- "-${pid}" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+    pkill -KILL -P "$pid" 2>/dev/null || true
   fi
   rm -f "$PID_FILE"
 fi
 
-pkill -f '[/]bin/raftCoreRun' 2>/dev/null || true
-pkill -f 'raftCoreRun' 2>/dev/null || true
+pkill -KILL -f '[/]bin/raftCoreRun' 2>/dev/null || true
+pkill -KILL -f 'raftCoreRun' 2>/dev/null || true
 sleep 0.5
 
 if [[ -f "$CONF" ]]; then
