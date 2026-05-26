@@ -4,9 +4,14 @@ name: CI
 
 on:
   push:
-    branches: [main, master, 'feat/**']
+    branches:
+      - main
+      - master
+      - feat/**
+      - feat/perf-apply-wait
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   build-and-smoke:
