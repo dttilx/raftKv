@@ -7,8 +7,8 @@ on:
     branches:
       - main
       - master
-      - feat/**
-      - feat/perf-apply-wait
+      - 'feat/**'
+      - 'feat/perf-apply-wait'
   pull_request:
     branches: [main, master]
   workflow_dispatch:
