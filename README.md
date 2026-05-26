@@ -184,6 +184,27 @@ sudo apt-get install -y build-essential cmake pkg-config \
 
 旧版父进程在每次 `fork` 后 `sleep(1)`，导致后启动的节点晚 1～2 秒才监听，先启动的节点已开始选举。现版已改为子进程内错峰 `Start()`（见 `example/raftCoreExample/raftKvDB.cpp`）。请拉最新 `main` 并重编。极慢机器上若仍有零星失败，稍等片刻，Raft 会重试选举。
 
+### 压测时终端刷屏 `[grpc][Get] code=14`（failed to connect）
+
+**含义**：Clerk 连不上 `test.conf` 里某个端口（常见为 `19002` / `19003`），gRPC 14 = 服务不可用。
+
+**常见原因**：
+
+1. **未先起集群**或 `cluster_up` 未出现 `cluster is ready` 就运行 `kv_bench`。
+2. **只有部分节点在跑**（另两个子进程启动失败）→ 先 `./scripts/check_cluster.sh`，再看 `logs/cluster.log`。
+3. 旧版 Clerk **失败即死循环重试且每条都打日志**；新版已加退避、不可达节点短暂跳过、日志 5s 限流。
+
+**推荐顺序**：
+
+```bash
+./scripts/cluster_down.sh
+./scripts/cluster_up.sh    # 等到 cluster is ready
+./scripts/check_cluster.sh
+./bin/kv_bench -c test.conf -t 8 -s 15 -k 10000 -v 64 -w 10
+```
+
+调试时可设 `RAFTKV_VERBOSE_GRPC=1` 查看每一次 RPC 失败。
+
 ### 跳表调试输出
 
 跳表热路径日志默认关闭。需要时用编译选项加入 `-DSKIP_LIST_TRACE=1`。

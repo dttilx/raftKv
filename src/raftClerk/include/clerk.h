@@ -10,6 +10,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <chrono>
 #include <cerrno>
 #include <string>
 #include <vector>
@@ -22,6 +23,14 @@ class Clerk {
   std::string m_clientId;
   int m_requestId;
   int m_recentLeaderId;  //只是有可能是领导
+  std::vector<std::chrono::steady_clock::time_point> m_unhealthyUntil;
+  int m_consecutiveRpcFailures{0};
+
+  bool IsServerReachable(int server) const;
+  void MarkServerUnreachable(int server);
+  int PickNextServer(int current, bool rpcOk, const std::string& err);
+  void RpcBackoff();
+  void CheckClusterReachableOrExit();
 
   std::string Uuid() {
     return std::to_string(rand()) + std::to_string(rand()) + std::to_string(rand()) + std::to_string(rand());

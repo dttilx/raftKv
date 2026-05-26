@@ -126,6 +126,8 @@ void KvServer::Get(const raftKVRpcProctoc::GetArgs *args, raftKVRpcProctoc::GetR
   PrintReadMetricsIfNeeded();
 }
 
+void KvServer::notifyAppliedProgress() { m_applyCv.notify_all(); }
+
 std::string KvServer::WrongLeaderErr() {
   int leaderId = m_raftNode->GetKnownLeaderId();
   if (leaderId >= 0) {
@@ -148,8 +150,6 @@ bool KvServer::RequestReadIndex(int *readIndex) {
 
   if (shouldRunReadIndex) {
     while (true) {
-      sleepNMilliseconds(1);
-
       std::vector<std::shared_ptr<PendingRead> > batch;
       {
         std::lock_guard<std::mutex> lg(m_readIndexMtx);
@@ -206,19 +206,16 @@ bool KvServer::RequestReadIndex(int *readIndex) {
 }
 
 bool KvServer::WaitApplied(int raftIndex) {
-  auto start = now();
-  while (true) {
-    {
-      std::lock_guard<std::mutex> lg(m_mtx);
-      if (m_lastAppliedRaftLogIndex >= raftIndex) {
-        return true;
-      }
-    }
+  const auto start = now();
+  std::unique_lock<std::mutex> lock(m_mtx);
+  while (m_lastAppliedRaftLogIndex < raftIndex) {
     if (std::chrono::duration<double, std::milli>(now() - start).count() >= CONSENSUS_TIMEOUT) {
       return false;
     }
-    sleepNMilliseconds(ApplyInterval);
+    m_applyCv.wait_for(lock, std::chrono::milliseconds(ApplyInterval),
+                       [this, raftIndex]() { return m_lastAppliedRaftLogIndex >= raftIndex; });
   }
+  return true;
 }
 
 void KvServer::PrintReadMetricsIfNeeded() {
@@ -269,6 +266,7 @@ void KvServer::GetCommandFromRaft(ApplyMsg message) {
   {
     std::lock_guard<std::mutex> lg(m_mtx);
     m_lastAppliedRaftLogIndex = std::max(m_lastAppliedRaftLogIndex, message.CommandIndex);
+    notifyAppliedProgress();
   }
 
   // Send message to the chan of op.ClientId
@@ -424,6 +422,7 @@ void KvServer::GetSnapShotFromRaft(ApplyMsg message) {
     ReadSnapShotToInstall(message.Snapshot);
     m_lastSnapShotRaftLogIndex = message.SnapshotIndex;
     m_lastAppliedRaftLogIndex = std::max(m_lastAppliedRaftLogIndex, message.SnapshotIndex);
+    notifyAppliedProgress();
   }
 }
 

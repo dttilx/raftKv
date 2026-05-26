@@ -40,6 +40,18 @@ while ((SECONDS < deadline)); do
   if [[ $all_ok -eq 1 ]]; then
     echo "all ${#PORTS[@]} ports listening: ${PORTS[*]}"
     sleep "$ELECTION_PAUSE"
+    # 选举等待后再探一次：避免「短暂监听后子进程崩溃」仍报 cluster is ready
+    for port in "${PORTS[@]}"; do
+      if ! tcp_probe 127.0.0.1 "$port"; then
+        echo "port $port closed after election pause; check $CLUSTER_LOG" >&2
+        exit 1
+      fi
+    done
+    child_count="$(pgrep -fc 'raftCoreRun' 2>/dev/null || echo 0)"
+    if [[ "$child_count" -lt "${#PORTS[@]}" ]]; then
+      echo "only $child_count raftCoreRun process(es), expected at least ${#PORTS[@]}; check $CLUSTER_LOG" >&2
+      exit 1
+    fi
     exit 0
   fi
   sleep 0.2

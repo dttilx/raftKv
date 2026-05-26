@@ -59,6 +59,8 @@ include_directories(${PROJECT_SOURCE_DIR}/src/skipList/include)
 link_directories(${PROJECT_SOURCE_DIR}/lib)
 
 # src包含了所有的相关代码
+enable_testing()
+
 add_subdirectory(src)
 # example包含了使用的示例代码
 add_subdirectory(example)

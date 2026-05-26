@@ -15,10 +15,13 @@
 // 对于一个节点来说，对于任意其他的节点都要维护一个rpc连接，
 class raftServerRpcUtil {
  private:
+  std::shared_ptr<grpc::Channel> m_channel;
   std::unique_ptr<raftKVRpcProctoc::kvServerRpc::Stub> stub;
   std::string m_target;
 
  public:
+  bool WaitForReady(int timeoutMs) const;
+  const std::string& Target() const { return m_target; }
   //主动调用其他节点的三个方法,可以按照mit6824来调用，但是别的节点调用自己的好像就不行了，要继承protoc提供的service类才行
 
   //响应其他节点的方法

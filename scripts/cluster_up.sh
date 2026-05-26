@@ -9,7 +9,8 @@
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
-CLEAN_PERSIST="${RAFTKV_CLEAN_PERSIST:-0}"
+# 默认清空持久化，避免脏 raftstate 导致部分节点启动后崩溃（可 export RAFTKV_CLEAN_PERSIST=0 关闭）
+CLEAN_PERSIST="${RAFTKV_CLEAN_PERSIST:-1}"
 NODE_NUM="${RAFTKV_NODE_NUM:-3}"
 
 if [[ ! -x "$RAFTKV_ROOT/bin/raftCoreRun" ]]; then

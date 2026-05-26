@@ -7,7 +7,12 @@
 
 #include "util.h"
 
+#include <algorithm>
+#include <chrono>
+#include <climits>
 #include <cstdlib>
+#include <iostream>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -31,15 +36,76 @@ bool ParseWrongLeader(const std::string& err, int serverCount, int* leaderId) {
   return true;
 }
 
-int NextServerAfterWrongLeader(const std::string& err, int currentServer, int serverCount) {
-  int leaderId = -1;
-  if (ParseWrongLeader(err, serverCount, &leaderId) && leaderId >= 0) {
-    return leaderId;
+}  // namespace
+
+bool Clerk::IsServerReachable(int server) const {
+  if (server < 0 || server >= static_cast<int>(m_unhealthyUntil.size())) {
+    return false;
   }
-  return (currentServer + 1) % serverCount;
+  return std::chrono::steady_clock::now() >= m_unhealthyUntil[static_cast<size_t>(server)];
 }
 
-}  // namespace
+void Clerk::MarkServerUnreachable(int server) {
+  if (server < 0 || server >= static_cast<int>(m_unhealthyUntil.size())) {
+    return;
+  }
+  m_unhealthyUntil[static_cast<size_t>(server)] =
+      std::chrono::steady_clock::now() + std::chrono::milliseconds(800);
+}
+
+void Clerk::RpcBackoff() {
+  ++m_consecutiveRpcFailures;
+  const int backoffMs = std::min(5 * m_consecutiveRpcFailures, 80);
+  sleepNMilliseconds(backoffMs);
+}
+
+int Clerk::PickNextServer(int current, bool rpcOk, const std::string& err) {
+  const int serverCount = static_cast<int>(m_servers.size());
+  if (serverCount <= 0) {
+    return 0;
+  }
+
+  if (rpcOk) {
+    int leaderId = -1;
+    if (ParseWrongLeader(err, serverCount, &leaderId) && leaderId >= 0 && IsServerReachable(leaderId)) {
+      return leaderId;
+    }
+  } else {
+    MarkServerUnreachable(current);
+  }
+
+  for (int step = 1; step <= serverCount; ++step) {
+    const int next = (current + step) % serverCount;
+    if (IsServerReachable(next)) {
+      return next;
+    }
+  }
+  return (current + 1) % serverCount;
+}
+
+void Clerk::CheckClusterReachableOrExit() {
+  static std::once_flag once;
+  std::call_once(once, [this]() {
+    int reachable = 0;
+    for (int i = 0; i < static_cast<int>(m_servers.size()); ++i) {
+      if (m_servers[static_cast<size_t>(i)]->WaitForReady(3000)) {
+        ++reachable;
+      } else {
+        std::cerr << "[Clerk] unreachable: " << m_servers[static_cast<size_t>(i)]->Target() << std::endl;
+      }
+    }
+    if (reachable == 0) {
+      std::cerr << "[Clerk] no KV node reachable. Start cluster first: ./scripts/cluster_up.sh\n"
+                << "  then verify: ss -tlnp | grep -E '19001|19002|19003'\n"
+                << "  logs: logs/cluster.log" << std::endl;
+      std::exit(1);
+    }
+    if (reachable < static_cast<int>(m_servers.size())) {
+      std::cerr << "[Clerk] warning: only " << reachable << "/" << m_servers.size()
+                << " nodes reachable (fix cluster before bench; see logs/cluster.log)" << std::endl;
+    }
+  });
+}
 
 std::string Clerk::Get(std::string key) {
   m_requestId++;
@@ -52,14 +118,17 @@ std::string Clerk::Get(std::string key) {
 
   while (true) {
     raftKVRpcProctoc::GetReply reply;
-    bool ok = m_servers[server]->Get(&args, &reply);
+    bool ok = m_servers[static_cast<size_t>(server)]->Get(&args, &reply);
     int leaderId = -1;
     bool wrongLeader = ok && ParseWrongLeader(reply.err(), static_cast<int>(m_servers.size()), &leaderId);
     if (!ok || wrongLeader) {
-      server = ok ? NextServerAfterWrongLeader(reply.err(), server, static_cast<int>(m_servers.size()))
-                  : (server + 1) % m_servers.size();
+      if (!ok) {
+        RpcBackoff();
+      }
+      server = PickNextServer(server, ok, reply.err());
       continue;
     }
+    m_consecutiveRpcFailures = 0;
     if (reply.err() == ErrNoKey) {
       return "";
     }
@@ -72,7 +141,6 @@ std::string Clerk::Get(std::string key) {
 }
 
 void Clerk::PutAppend(std::string key, std::string value, std::string op) {
-  // You will have to modify this function.
   m_requestId++;
   auto requestId = m_requestId;
   auto server = m_recentLeaderId;
@@ -84,23 +152,18 @@ void Clerk::PutAppend(std::string key, std::string value, std::string op) {
     args.set_clientid(m_clientId);
     args.set_requestid(requestId);
     raftKVRpcProctoc::PutAppendReply reply;
-    bool ok = m_servers[server]->PutAppend(&args, &reply);
+    bool ok = m_servers[static_cast<size_t>(server)]->PutAppend(&args, &reply);
     int leaderId = -1;
     bool wrongLeader = ok && ParseWrongLeader(reply.err(), static_cast<int>(m_servers.size()), &leaderId);
     if (!ok || wrongLeader) {
-      DPrintf("【Clerk::PutAppend】原以为的leader：{%d}请求失败，向新leader{%d}重试  ，操作：{%s}", server, server + 1,
-              op.c_str());
       if (!ok) {
-        DPrintf("重试原因 ，rpc失敗 ，");
+        RpcBackoff();
       }
-      if (wrongLeader) {
-        DPrintf("重試原因：非leader");
-      }
-      server = ok ? NextServerAfterWrongLeader(reply.err(), server, static_cast<int>(m_servers.size()))
-                  : (server + 1) % m_servers.size();
+      server = PickNextServer(server, ok, reply.err());
       continue;
     }
-    if (reply.err() == OK) {  //什么时候reply errno为ok呢？？？
+    m_consecutiveRpcFailures = 0;
+    if (reply.err() == OK) {
       m_recentLeaderId = server;
       return;
     }
@@ -110,9 +173,8 @@ void Clerk::PutAppend(std::string key, std::string value, std::string op) {
 void Clerk::Put(std::string key, std::string value) { PutAppend(key, value, "Put"); }
 
 void Clerk::Append(std::string key, std::string value) { PutAppend(key, value, "Append"); }
-//初始化客户端
+
 void Clerk::Init(std::string configFileName) {
-  //获取所有raft节点ip、port ，并进行连接
   NodeConfig config;
   config.LoadConfigFile(configFileName.c_str());
   std::vector<std::pair<std::string, short>> ipPortVt;
@@ -124,16 +186,14 @@ void Clerk::Init(std::string configFileName) {
     if (nodeIp.empty()) {
       break;
     }
-    ipPortVt.emplace_back(nodeIp, atoi(nodePortStr.c_str()));  //沒有atos方法，可以考慮自己实现
+    ipPortVt.emplace_back(nodeIp, static_cast<short>(std::atoi(nodePortStr.c_str())));
   }
-  //进行连接
   for (const auto& item : ipPortVt) {
-    std::string ip = item.first;
-    short port = item.second;
-    // 2024-01-04 todo：bug fix
-    auto* rpc = new raftServerRpcUtil(ip, port);
-    m_servers.push_back(std::shared_ptr<raftServerRpcUtil>(rpc));
+    auto rpc = std::make_shared<raftServerRpcUtil>(item.first, item.second);
+    m_servers.push_back(rpc);
   }
+  m_unhealthyUntil.assign(m_servers.size(), std::chrono::steady_clock::time_point{});
+  CheckClusterReachableOrExit();
 }
 
 Clerk::Clerk() : m_clientId(Uuid()), m_requestId(0), m_recentLeaderId(0) {}

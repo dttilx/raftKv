@@ -85,6 +85,7 @@ void Raft::AppendEntries1(const raftRpcProctoc::AppendEntriesArgs* args, raftRpc
     // }
     if (args->leadercommit() > m_commitIndex) {
       m_commitIndex = std::min(args->leadercommit(), getLastLogIndex());
+      wakeApplier();
     }
 
     myAssert(getLastLogIndex() >= m_commitIndex,
@@ -120,23 +121,35 @@ void Raft::AppendEntries1(const raftRpcProctoc::AppendEntriesArgs* args, raftRpc
   // fmt.Printf("[func-AppendEntries,rf{%v}]:len(rf.logs):%v, rf.commitIndex:%v\n", rf.me, len(rf.logs), rf.commitIndex)
 }
 
+void Raft::wakeApplier() {
+  if (m_lastApplied < m_commitIndex) {
+    m_applyCommitCv.notify_one();
+  }
+}
+
 void Raft::applierTicker() {
   while (true) {
-    m_mtx.lock();
-    if (m_status == Leader) {
-      DPrintf("[Raft::applierTicker() - raft{%d}]  m_lastApplied{%d}   m_commitIndex{%d}", m_me, m_lastApplied,
-              m_commitIndex);
+    std::vector<ApplyMsg> applyMsgs;
+    {
+      std::unique_lock<std::mutex> lock(m_mtx);
+      if (m_status == Leader) {
+        DPrintf("[Raft::applierTicker() - raft{%d}]  m_lastApplied{%d}   m_commitIndex{%d}", m_me, m_lastApplied,
+                m_commitIndex);
+      }
+      applyMsgs = getApplyLogs();
+      if (applyMsgs.empty()) {
+        m_applyCommitCv.wait_for(lock, std::chrono::milliseconds(ApplyInterval), [this]() {
+          return m_lastApplied < m_commitIndex;
+        });
+        continue;
+      }
     }
-    auto applyMsgs = getApplyLogs();
-    m_mtx.unlock();
     if (!applyMsgs.empty()) {
       DPrintf("[func- Raft::applierTicker()-raft{%d}] 鍚慿vserver鍫卞憡鐨刟pplyMsgs闀峰害鐖诧細{%d}", m_me, applyMsgs.size());
     }
     for (auto& message : applyMsgs) {
       applyChan->Push(message);
     }
-    // usleep(1000 * ApplyInterval);
-    sleepNMilliseconds(ApplyInterval);
   }
 }
 
@@ -491,6 +504,7 @@ void Raft::InstallSnapshot(const raftRpcProctoc::InstallSnapshotRequest* args,
   m_lastApplied = std::max(m_lastApplied, args->lastsnapshotincludeindex());
   m_lastSnapshotIncludeIndex = args->lastsnapshotincludeindex();
   m_lastSnapshotIncludeTerm = args->lastsnapshotincludeterm();
+  wakeApplier();
 
   reply->set_term(m_currentTerm);
   ApplyMsg msg;
@@ -571,8 +585,7 @@ void Raft::leaderSendSnapShot(int server) {
 }
 
 void Raft::leaderUpdateCommitIndex() {
-  // for index := rf.commitIndex+1;index < len(rf.log);index++ {
-  // for index := rf.getLastIndex();index>=rf.commitIndex+1;index--{
+  const int oldCommitIndex = m_commitIndex;
   for (int index = getLastLogIndex(); index > m_commitIndex; index--) {
     int sum = 0;
     for (int i = 0; i < m_peers.size(); i++) {
@@ -585,15 +598,14 @@ void Raft::leaderUpdateCommitIndex() {
       }
     }
 
-    // log.Printf("lastSSP:%d, index: %d, commitIndex: %d, lastIndex: %d",rf.lastSSPointIndex, index, rf.commitIndex,
-    // rf.getLastIndex())
     if (sum >= m_peers.size() / 2 + 1 && getLogTermFromLogIndex(index) == m_currentTerm) {
       m_commitIndex = index;
       break;
     }
   }
-  //    DPrintf("[func-leaderUpdateCommitIndex()-rf{%v}] Leader %d(term%d) commitIndex
-  //    %d",rf.me,rf.me,rf.currentTerm,rf.commitIndex)
+  if (m_commitIndex > oldCommitIndex) {
+    wakeApplier();
+  }
 }
 
 bool Raft::matchLog(int logIndex, int logTerm) {
@@ -1041,6 +1053,7 @@ void Raft::Snapshot(int index, std::string snapshot) {
   m_logs = trunckedLogs;
   m_commitIndex = std::max(m_commitIndex, index);
   m_lastApplied = std::max(m_lastApplied, index);
+  wakeApplier();
 
   m_persister->Save(persistData(), snapshot);
 

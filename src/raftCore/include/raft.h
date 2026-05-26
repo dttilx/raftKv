@@ -4,6 +4,7 @@
 #include <boost/serialization/string.hpp>
 #include <boost/serialization/vector.hpp>
 #include <chrono>
+#include <condition_variable>
 #include <cmath>
 #include <grpcpp/grpcpp.h>
 #include <iostream>
@@ -34,6 +35,9 @@ constexpr int Normal = 3;
 class Raft : public raftRpcProctoc::raftRpc::Service {
  private:
   std::mutex m_mtx;
+  std::condition_variable m_applyCommitCv;
+
+  void wakeApplier();
   std::vector<std::shared_ptr<RaftRpcUtil>> m_peers;
   std::shared_ptr<Persister> m_persister;
   int m_me;

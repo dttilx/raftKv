@@ -9,19 +9,12 @@
 #include <string>
 
 #include "config.h"
+#include "grpc_log_util.h"
 
 namespace {
 
 void SetRpcDeadline(grpc::ClientContext* context) {
   context->set_deadline(std::chrono::system_clock::now() + std::chrono::milliseconds(RPC_CALL_TIMEOUT));
-}
-
-void LogRpcFailure(const std::string& target, const char* method, const grpc::Status& status) {
-  if (status.ok()) {
-    return;
-  }
-  std::cerr << "[grpc][" << method << "] target=" << target << " code=" << status.error_code()
-            << " message=" << status.error_message() << std::endl;
 }
 
 }  // namespace
@@ -30,7 +23,7 @@ bool RaftRpcUtil::AppendEntries(raftRpcProctoc::AppendEntriesArgs *args, raftRpc
   grpc::ClientContext context;
   SetRpcDeadline(&context);
   grpc::Status status = stub_->AppendEntries(&context, *args, response);
-  LogRpcFailure(m_target, "AppendEntries", status);
+  raftkv_grpc_log::LogRpcFailure(m_target, "AppendEntries", status);
   return status.ok();
 }
 
@@ -39,7 +32,7 @@ bool RaftRpcUtil::InstallSnapshot(raftRpcProctoc::InstallSnapshotRequest *args,
   grpc::ClientContext context;
   SetRpcDeadline(&context);
   grpc::Status status = stub_->InstallSnapshot(&context, *args, response);
-  LogRpcFailure(m_target, "InstallSnapshot", status);
+  raftkv_grpc_log::LogRpcFailure(m_target, "InstallSnapshot", status);
   return status.ok();
 }
 
@@ -47,7 +40,7 @@ bool RaftRpcUtil::RequestVote(raftRpcProctoc::RequestVoteArgs *args, raftRpcProc
   grpc::ClientContext context;
   SetRpcDeadline(&context);
   grpc::Status status = stub_->RequestVote(&context, *args, response);
-  LogRpcFailure(m_target, "RequestVote", status);
+  raftkv_grpc_log::LogRpcFailure(m_target, "RequestVote", status);
   return status.ok();
 }
 

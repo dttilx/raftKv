@@ -57,6 +57,9 @@ class KvServer : public raftKVRpcProctoc::kvServerRpc::Service {
   // last SnapShot point , raftIndex
   int m_lastSnapShotRaftLogIndex;
   int m_lastAppliedRaftLogIndex;
+  std::condition_variable m_applyCv;
+
+  void notifyAppliedProgress();
   std::atomic<std::uint64_t> m_readIndexSuccess{0};
   std::atomic<std::uint64_t> m_readIndexFailure{0};
   std::atomic<std::uint64_t> m_readApplyTimeout{0};
