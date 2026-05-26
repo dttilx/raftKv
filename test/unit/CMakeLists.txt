@@ -37,5 +37,10 @@ target_link_libraries(raftkv_unit_tests PRIVATE
     pthread
 )
 
+# 覆盖根 CMakeLists 的 EXECUTABLE_OUTPUT_PATH，保证 ctest 在 cmake-build 下能找到可执行文件
+set_target_properties(raftkv_unit_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
 include(GoogleTest)
-gtest_discover_tests(raftkv_unit_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(raftkv_unit_tests WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

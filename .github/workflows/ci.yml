@@ -30,8 +30,13 @@ jobs:
 
       - name: Unit tests
         run: |
-          cd cmake-build
-          ctest --output-on-failure
+          if [[ -x cmake-build/test/unit/raftkv_unit_tests ]]; then
+            ./cmake-build/test/unit/raftkv_unit_tests
+          elif [[ -x bin/raftkv_unit_tests ]]; then
+            ./bin/raftkv_unit_tests
+          else
+            cd cmake-build && ctest --output-on-failure
+          fi
 
       - name: Smoke test (consistency + short bench)
         run: |
