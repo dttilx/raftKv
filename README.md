@@ -205,6 +205,14 @@ sudo apt-get install -y build-essential cmake pkg-config \
 
 调试时可设 `RAFTKV_VERBOSE_GRPC=1` 查看每一次 RPC 失败。
 
+一键诊断（进程、端口、`cluster.log`）：
+
+```bash
+./scripts/diagnose_cluster.sh
+```
+
+说明：默认用 **nohup → `logs/cluster.log`**，**不必** `journalctl`（除非你把节点做成 systemd 服务）。
+
 ### 跳表调试输出
 
 跳表热路径日志默认关闭。需要时用编译选项加入 `-DSKIP_LIST_TRACE=1`。

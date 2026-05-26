@@ -47,9 +47,16 @@ while ((SECONDS < deadline)); do
         exit 1
       fi
     done
-    child_count="$(pgrep -fc 'raftCoreRun' 2>/dev/null || echo 0)"
+    child_count=0
+    if [[ -f "$PID_FILE" ]]; then
+      parent_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+      if [[ -n "${parent_pid:-}" ]]; then
+        child_count="$(pgrep -P "$parent_pid" 2>/dev/null | wc -l | tr -d ' ')"
+      fi
+    fi
     if [[ "$child_count" -lt "${#PORTS[@]}" ]]; then
-      echo "only $child_count raftCoreRun process(es), expected at least ${#PORTS[@]}; check $CLUSTER_LOG" >&2
+      echo "only $child_count raftCoreRun child process(es), expected ${#PORTS[@]}; check $CLUSTER_LOG" >&2
+      echo "run: ./scripts/diagnose_cluster.sh" >&2
       exit 1
     fi
     exit 0

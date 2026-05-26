@@ -33,4 +33,14 @@ if [[ -f "$CONF" ]]; then
   done
 fi
 
+sleep 0.3
+if [[ -f "$CONF" ]]; then
+  read_ports_from_conf "$CONF" 2>/dev/null || true
+  for port in "${PORTS[@]:-}"; do
+    if ss -tln 2>/dev/null | grep -q ":${port} "; then
+      echo "warning: port $port still in use after cluster_down" >&2
+    fi
+  done
+fi
+
 echo "cluster stopped"
