@@ -37,8 +37,11 @@ TEST(SkipListTest, SearchMissingKey) {
 
 TEST(SkipListTest, InsertSetElementOverwrites) {
   SkipList<std::string, std::string> list(16);
-  list.insert_set_element(std::string("k1"), std::string("v1"));
-  list.insert_set_element(std::string("k1"), std::string("v2"));
+  std::string k1 = "k1";
+  std::string v1 = "v1";
+  std::string v2 = "v2";
+  list.insert_set_element(k1, v1);
+  list.insert_set_element(k1, v2);
   std::string value;
   ASSERT_TRUE(list.search_element("k1", value));
   EXPECT_EQ(value, "v2");

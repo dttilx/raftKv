@@ -23,6 +23,7 @@ add_executable(raftkv_unit_tests
     op_test.cpp
     persister_test.cpp
     ${CMAKE_SOURCE_DIR}/src/raftCore/Persister.cpp
+    ${CMAKE_SOURCE_DIR}/src/common/util.cpp
 )
 
 target_include_directories(raftkv_unit_tests PRIVATE
