@@ -169,8 +169,33 @@ cp deploy/test.conf.fixed test.conf
 |--------|------|------|
 | [**CI**](.github/workflows/ci.yml) | `push` / `PR` | 编译 → `smoke.sh`（一致性 + 5s 压测）→ `smoke_chaos.sh` |
 | [**Bench Nightly**](.github/workflows/bench-nightly.yml) | 每周日 UTC 03:00 / 手动 **Run workflow** | 编译 → `bench_nightly.sh`（8 线程 × **15 s**，README 同参） |
+| [**Chaos Nightly**](.github/workflows/chaos-nightly.yml) | 每周日 UTC 03:30 / 手动 **Run workflow** | 编译 → `chaos_runner.sh`（故障注入 + 前后一致性校验 + JSON/Markdown 报告） |
 
 PR 门禁以 **CI** 为准；**Bench Nightly** 用于跟踪长跑 QPS/延迟趋势，失败仅当 `errors≠0`。
+
+### Chaos Testing
+
+最小可用闭环：故障前一致性检查 → 注入故障 → 故障后一致性检查，并输出报告。
+
+```bash
+chmod +x scripts/*.sh
+./scripts/chaos_runner.sh --scenario kill-restart --rounds 3 --keys 400 --sleep 6
+```
+
+默认产物：
+
+- `logs/chaos_report.json`
+- `logs/chaos_summary.md`
+- `logs/chaos_round_*_baseline.log`
+- `logs/chaos_round_*_post.log`
+
+示例结果（`kill-restart`）：
+
+```text
+chaos_runner OK rounds=3 pass=3 report=logs/chaos_report.json summary=logs/chaos_summary.md
+```
+
+更多参数与场景说明见：[`docs/chaos-testing.md`](docs/chaos-testing.md)。
 
 ### 单测覆盖范围（当前）
 

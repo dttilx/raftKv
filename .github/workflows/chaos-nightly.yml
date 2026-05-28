@@ -1,0 +1,67 @@
+name: Chaos Nightly
+
+on:
+  schedule:
+    - cron: '30 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RAFTKV_CLEAN_PERSIST: 1
+      RAFTKV_CHAOS_SCENARIO: kill-restart
+      RAFTKV_CHAOS_ROUNDS: 3
+      RAFTKV_CHAOS_SLEEP: 6
+      RAFTKV_CONSISTENCY_KEYS: 400
+      RAFTKV_CONSISTENCY_ROUNDS: 1
+      RAFTKV_CHAOS_REPORT: logs/chaos_report.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgrpc++-dev libprotobuf-dev protobuf-compiler-grpc \
+            libboost-serialization-dev netcat-openbsd psmisc iproute2
+
+      - name: Configure and build
+        run: |
+          cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build cmake-build -j"$(nproc)"
+
+      - name: Run chaos harness
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/chaos_runner.sh --scenario "${RAFTKV_CHAOS_SCENARIO}" \
+            --rounds "${RAFTKV_CHAOS_ROUNDS}" \
+            --keys "${RAFTKV_CONSISTENCY_KEYS}" \
+            --check-rounds "${RAFTKV_CONSISTENCY_ROUNDS}" \
+            --sleep "${RAFTKV_CHAOS_SLEEP}" \
+            --report "${RAFTKV_CHAOS_REPORT}" | tee logs/chaos-nightly.log
+
+      - name: Job summary
+        if: always()
+        run: |
+          if [[ -f "${RAFTKV_CHAOS_REPORT}" ]]; then
+            echo "### Chaos Nightly Result" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat "${RAFTKV_CHAOS_REPORT}" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload chaos artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-nightly-${{ github.run_id }}
+          path: |
+            logs/cluster.log
+            logs/chaos-nightly.log
+            logs/chaos_report.json
+            logs/chaos_round_*_baseline.log
+            logs/chaos_round_*_post.log
+          if-no-files-found: ignore
