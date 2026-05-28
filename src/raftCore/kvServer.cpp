@@ -537,3 +537,12 @@ void KvServer::Wait() {
 }
 
 void KvServer::StartKVServer() { (void)Start(); }
+
+void KvServer::TestSetLastAppliedRaftLogIndex(int index) {
+  std::lock_guard<std::mutex> lg(m_mtx);
+  m_lastAppliedRaftLogIndex = index;
+}
+
+bool KvServer::TestWaitApplied(int raftIndex) { return WaitApplied(raftIndex); }
+
+void KvServer::TestNotifyAppliedProgress() { notifyAppliedProgress(); }

@@ -1063,3 +1063,32 @@ void Raft::Snapshot(int index, std::string snapshot) {
            format("len(rf.logs){%d} + rf.lastSnapshotIncludeIndex{%d} != lastLogjInde{%d}", m_logs.size(),
                   m_lastSnapshotIncludeIndex, lastLogIndex));
 }
+
+void Raft::TestSetCoreState(int currentTerm, int commitIndex, int lastApplied, int lastSnapshotIncludeIndex,
+                            int lastSnapshotIncludeTerm) {
+  std::lock_guard<std::mutex> lg(m_mtx);
+  m_currentTerm = currentTerm;
+  m_commitIndex = commitIndex;
+  m_lastApplied = lastApplied;
+  m_lastSnapshotIncludeIndex = lastSnapshotIncludeIndex;
+  m_lastSnapshotIncludeTerm = lastSnapshotIncludeTerm;
+}
+
+void Raft::TestSetPeersAndMatchIndex(int peerCount, const std::vector<int>& matchIndex) {
+  std::lock_guard<std::mutex> lg(m_mtx);
+  m_peers.assign(static_cast<size_t>(peerCount), nullptr);
+  m_matchIndex = matchIndex;
+}
+
+void Raft::TestSetLogs(const std::vector<raftRpcProctoc::LogEntry>& logs) {
+  std::lock_guard<std::mutex> lg(m_mtx);
+  m_logs = logs;
+}
+
+int Raft::TestCommitIndex() const { return m_commitIndex; }
+
+void Raft::TestWakeApplier() { wakeApplier(); }
+
+std::condition_variable& Raft::TestApplyCommitCv() { return m_applyCommitCv; }
+
+void Raft::TestLeaderUpdateCommitIndex() { leaderUpdateCommitIndex(); }

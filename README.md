@@ -23,6 +23,31 @@
 - 门禁：仅 **`errors=0`**；QPS / p50 / p99 随 runner 性能波动，**不与下方云机数值直接对比**。
 - 本地/CI 同参手动跑：`./scripts/bench_nightly.sh`（需先 `cluster_up` 或由脚本自动启停）。
 
+最近一次手动触发（`feat/perf-apply-wait`，GitHub runner）示例：
+
+```text
+ops=40273 errors=0 qps=2684.87
+latency_us: avg=2978.8 p50=970.0 p99=23230.4
+```
+
+### `feat/perf-apply-wait` 分支提速点（QPS 上升的主要原因）
+
+相对 `main`，该分支围绕“减少固定 sleep + 避免空转轮询”做了几处关键优化：
+
+1. **KV 等待 apply 改为条件变量唤醒**
+   - `KvServer::WaitApplied()` 从 `sleep(ApplyInterval)` 轮询改为 `m_applyCv.wait_for(...)`。
+   - 收到 apply 日志和安装快照时调用 `notifyAppliedProgress()` 主动唤醒等待请求。
+2. **Raft applier 从周期 sleep 改为事件驱动**
+   - 新增 `m_applyCommitCv` 与 `wakeApplier()`。
+   - commitIndex 推进或快照安装后立即唤醒 applier，而不是每轮固定睡眠。
+3. **读路径减少额外等待**
+   - `RequestReadIndex()` 去掉批处理前的 `sleepNMilliseconds(1)`，降低读请求排队等待。
+4. **Clerk 失败重试更平滑**
+   - RPC 失败加入短退避（上限 80 ms）与不可达节点短暂跳过，降低无效重试和刷屏。
+   - 新增 RPC 失败日志限流（默认 5s 抑制重复日志），避免日志 IO 放大对压测的干扰。
+
+说明：以上改动主要降低了“提交后到可见”的等待时间和请求空转开销，因此在同参短压测下 QPS 会明显提升。
+
 ### 维护者云机实测（历史参考）
 
 下列为**腾讯云 Ubuntu 云主机**上实测（旧版随机端口集群；现推荐 `./scripts/cluster_up.sh` + 固定 `19001–19003`）。压测命令：
@@ -155,6 +180,22 @@ cp deploy/test.conf.fixed test.conf
 | [**Bench Nightly**](.github/workflows/bench-nightly.yml) | 每周日 UTC 03:00 / 手动 **Run workflow** | 编译 → `bench_nightly.sh`（8 线程 × **15 s**，README 同参） |
 
 PR 门禁以 **CI** 为准；**Bench Nightly** 用于跟踪长跑 QPS/延迟趋势，失败仅当 `errors≠0`。
+
+### 单测覆盖范围（当前）
+
+`raftkv_unit_tests` 目前分三层：
+
+- 基础数据结构与序列化：
+  - `skip_list_test.cpp`
+  - `op_test.cpp`
+  - `persister_test.cpp`
+- Clerk 策略逻辑（纯逻辑）：
+  - `clerk_policy_test.cpp`（`ErrWrongLeader` 解析、节点选路、退避上限）
+- Raft/KV 性能关键路径（组件级）：
+  - `raft_apply_path_test.cpp`（commit 推进与 applier 唤醒）
+  - `kv_read_wait_test.cpp`（`WaitApplied` 唤醒/超时行为）
+
+说明：这些测试用于保护本次 `feat/perf-apply-wait` 的事件驱动优化，防止后续回归到固定轮询等待。
 
 生产形态多机部署通常需要每节点独立进程与启动编排；当前脚本面向 **本机 fork + 固定端口** 的可复现演示与自动化测试。
 

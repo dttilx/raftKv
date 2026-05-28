@@ -127,6 +127,16 @@ class Raft : public raftRpcProctoc::raftRpc::Service {
   // 即服务层主动发起请求raft保存snapshot里面的数据，index是用来表示snapshot快照执行到了哪条命令
   void Snapshot(int index, std::string snapshot);
 
+  // test helpers
+  void TestSetCoreState(int currentTerm, int commitIndex, int lastApplied, int lastSnapshotIncludeIndex,
+                        int lastSnapshotIncludeTerm);
+  void TestSetPeersAndMatchIndex(int peerCount, const std::vector<int>& matchIndex);
+  void TestSetLogs(const std::vector<raftRpcProctoc::LogEntry>& logs);
+  int TestCommitIndex() const;
+  void TestWakeApplier();
+  std::condition_variable& TestApplyCommitCv();
+  void TestLeaderUpdateCommitIndex();
+
  public:
   // 重写基类方法,因为rpc远程调用真正调用的是这个方法
   //序列化，反序列化等操作rpc框架都已经做完了，因此这里只需要获取值然后真正调用本地方法即可。

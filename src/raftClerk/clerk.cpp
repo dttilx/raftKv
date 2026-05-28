@@ -5,6 +5,7 @@
 
 #include "raftServerRpcUtil.h"
 
+#include "clerk_policy.h"
 #include "util.h"
 
 #include <algorithm>
@@ -15,28 +16,6 @@
 #include <mutex>
 #include <string>
 #include <vector>
-
-namespace {
-
-bool ParseWrongLeader(const std::string& err, int serverCount, int* leaderId) {
-  *leaderId = -1;
-  if (err == ErrWrongLeader) {
-    return true;
-  }
-
-  const std::string prefix = ErrWrongLeader + ":";
-  if (err.rfind(prefix, 0) != 0) {
-    return false;
-  }
-
-  int parsed = std::atoi(err.substr(prefix.size()).c_str());
-  if (parsed >= 0 && parsed < serverCount) {
-    *leaderId = parsed;
-  }
-  return true;
-}
-
-}  // namespace
 
 bool Clerk::IsServerReachable(int server) const {
   if (server < 0 || server >= static_cast<int>(m_unhealthyUntil.size())) {
@@ -55,7 +34,7 @@ void Clerk::MarkServerUnreachable(int server) {
 
 void Clerk::RpcBackoff() {
   ++m_consecutiveRpcFailures;
-  const int backoffMs = std::min(5 * m_consecutiveRpcFailures, 80);
+  const int backoffMs = raftkv_clerk_policy::ComputeRpcBackoffMs(m_consecutiveRpcFailures);
   sleepNMilliseconds(backoffMs);
 }
 
@@ -65,22 +44,15 @@ int Clerk::PickNextServer(int current, bool rpcOk, const std::string& err) {
     return 0;
   }
 
-  if (rpcOk) {
-    int leaderId = -1;
-    if (ParseWrongLeader(err, serverCount, &leaderId) && leaderId >= 0 && IsServerReachable(leaderId)) {
-      return leaderId;
-    }
-  } else {
+  if (!rpcOk) {
     MarkServerUnreachable(current);
   }
-
-  for (int step = 1; step <= serverCount; ++step) {
-    const int next = (current + step) % serverCount;
-    if (IsServerReachable(next)) {
-      return next;
-    }
+  std::vector<bool> reachable;
+  reachable.reserve(static_cast<size_t>(serverCount));
+  for (int i = 0; i < serverCount; ++i) {
+    reachable.push_back(IsServerReachable(i));
   }
-  return (current + 1) % serverCount;
+  return raftkv_clerk_policy::PickNextServerFromView(current, rpcOk, err, reachable);
 }
 
 void Clerk::CheckClusterReachableOrExit() {
@@ -120,7 +92,8 @@ std::string Clerk::Get(std::string key) {
     raftKVRpcProctoc::GetReply reply;
     bool ok = m_servers[static_cast<size_t>(server)]->Get(&args, &reply);
     int leaderId = -1;
-    bool wrongLeader = ok && ParseWrongLeader(reply.err(), static_cast<int>(m_servers.size()), &leaderId);
+    bool wrongLeader =
+        ok && raftkv_clerk_policy::ParseWrongLeaderHint(reply.err(), static_cast<int>(m_servers.size()), &leaderId);
     if (!ok || wrongLeader) {
       if (!ok) {
         RpcBackoff();
@@ -154,7 +127,8 @@ void Clerk::PutAppend(std::string key, std::string value, std::string op) {
     raftKVRpcProctoc::PutAppendReply reply;
     bool ok = m_servers[static_cast<size_t>(server)]->PutAppend(&args, &reply);
     int leaderId = -1;
-    bool wrongLeader = ok && ParseWrongLeader(reply.err(), static_cast<int>(m_servers.size()), &leaderId);
+    bool wrongLeader =
+        ok && raftkv_clerk_policy::ParseWrongLeaderHint(reply.err(), static_cast<int>(m_servers.size()), &leaderId);
     if (!ok || wrongLeader) {
       if (!ok) {
         RpcBackoff();

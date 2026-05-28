@@ -128,6 +128,11 @@ class KvServer : public raftKVRpcProctoc::kvServerRpc::Service {
 
   std::string MakeSnapShot();
 
+  // test helpers
+  void TestSetLastAppliedRaftLogIndex(int index);
+  bool TestWaitApplied(int raftIndex);
+  void TestNotifyAppliedProgress();
+
  public:  // for rpc
   grpc::Status PutAppend(grpc::ServerContext *context, const ::raftKVRpcProctoc::PutAppendArgs *request,
                          ::raftKVRpcProctoc::PutAppendReply *response) override;
