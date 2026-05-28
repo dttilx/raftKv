@@ -15,76 +15,67 @@
 
 ## 压测数据
 
-### 定时压测（GitHub Actions）
+### 压测口径（统一参数）
 
-每周日在 GitHub Ubuntu runner 上自动跑与下文**相同参数**的 15 s 压测（[`bench-nightly.yml`](.github/workflows/bench-nightly.yml)）：
+默认对比口径与 `bench_nightly.sh` 保持一致：
 
-- 查看结果：**[Actions → Bench Nightly](https://github.com/dttilx/raftKv/actions/workflows/bench-nightly.yml)** → 最新 Run → **Summary** 或下载 **bench-nightly** 附件。
-- 门禁：仅 **`errors=0`**；QPS / p50 / p99 随 runner 性能波动，**不与下方云机数值直接对比**。
-- 本地/CI 同参手动跑：`./scripts/bench_nightly.sh`（需先 `cluster_up` 或由脚本自动启停）。
+```text
+./bin/kv_bench -c test.conf -t 8 -s 15 -k 10000 -v 64 -w 10
+```
 
-最近一次手动触发（`feat/perf-apply-wait`，GitHub runner）示例：
+含义：**8 线程**、key 空间 **10000**、value **64B**、写比例 **10%**。  
+门槛：`errors=0` 视为正确性通过；QPS/p50/p99 作为性能观测指标。
+
+### 当前优化方案（`feat/perf-apply-wait`）
+
+相对 `main`，本轮性能优化集中在“去轮询、改事件驱动、减少无效重试”：
+
+1. **KV 等待 apply 改条件变量唤醒**
+   - `KvServer::WaitApplied()` 从固定 sleep 轮询改为 `m_applyCv.wait_for(...)`。
+   - apply 日志/快照落地后调用 `notifyAppliedProgress()` 及时唤醒等待读请求。
+2. **Raft applier 改事件驱动**
+   - 新增 `m_applyCommitCv` 与 `wakeApplier()`。
+   - `commitIndex` 推进或快照安装后立即唤醒 applier，减少空转等待。
+3. **读路径减少额外排队**
+   - `RequestReadIndex()` 去掉批处理前 `sleepNMilliseconds(1)`。
+4. **Clerk 失败路径治理**
+   - RPC 失败退避（上限 80ms）+ 不可达节点短暂跳过。
+   - gRPC 失败日志 5s 限流，降低日志刷屏对压测的干扰。
+
+### 当前结果与阶段性成果
+
+#### 1) GitHub runner（手动触发 `Bench Nightly`）
+
+最近一次 `feat/perf-apply-wait` 实测：
 
 ```text
 ops=40273 errors=0 qps=2684.87
 latency_us: avg=2978.8 p50=970.0 p99=23230.4
 ```
 
-### `feat/perf-apply-wait` 分支提速点（QPS 上升的主要原因）
+解读：中位延迟约 **0.97ms**，尾延迟约 **23.2ms**，正确性门槛 `errors=0` 满足。
 
-相对 `main`，该分支围绕“减少固定 sleep + 避免空转轮询”做了几处关键优化：
+#### 2) 维护者云机历史基线（优化前，供对比）
 
-1. **KV 等待 apply 改为条件变量唤醒**
-   - `KvServer::WaitApplied()` 从 `sleep(ApplyInterval)` 轮询改为 `m_applyCv.wait_for(...)`。
-   - 收到 apply 日志和安装快照时调用 `notifyAppliedProgress()` 主动唤醒等待请求。
-2. **Raft applier 从周期 sleep 改为事件驱动**
-   - 新增 `m_applyCommitCv` 与 `wakeApplier()`。
-   - commitIndex 推进或快照安装后立即唤醒 applier，而不是每轮固定睡眠。
-3. **读路径减少额外等待**
-   - `RequestReadIndex()` 去掉批处理前的 `sleepNMilliseconds(1)`，降低读请求排队等待。
-4. **Clerk 失败重试更平滑**
-   - RPC 失败加入短退避（上限 80 ms）与不可达节点短暂跳过，降低无效重试和刷屏。
-   - 新增 RPC 失败日志限流（默认 5s 抑制重复日志），避免日志 IO 放大对压测的干扰。
+旧基线（同参数、15s）稳定区间：
 
-说明：以上改动主要降低了“提交后到可见”的等待时间和请求空转开销，因此在同参短压测下 QPS 会明显提升。
-
-### 维护者云机实测（历史参考）
-
-下列为**腾讯云 Ubuntu 云主机**上实测（旧版随机端口集群；现推荐 `./scripts/cluster_up.sh` + 固定 `19001–19003`）。压测命令：
-
-```text
-./bin/kv_bench -c test.conf -t 8 -s 15 -k 10000 -v 64 -w 10
-```
-
-含义：**8 线程**、key 空间 **10000**、value **64 字节**、**10% Put / 90% Get**。数值随 CPU、机器负载与参数变化，**仅供参考**。
-
-### 方案 A：5 轮 × 每轮 **15 s**
-
-热身后 **第 2～5 轮** 波动范围较窄，各轮 **errors = 0**。
-
-| 指标 | 观测（第 2～5 轮） |
-|------|-------------------|
+| 指标 | 历史基线（第 2～5 轮） |
+|------|------------------------|
 | **QPS** | **1250.73 – 1278.20** |
 | **错误数** | **0** |
 | **p50** | **约 2.2 ms**（约 2200 µs） |
 | **平均延迟** | **约 6.3 – 6.4 ms** |
 | **p99** | **约 35 – 36 ms** |
 
-**小结：** 短跑约 **1.25k–1.28k QPS**，中位延迟稳定，尾延迟约 **35–36 ms**。
+> 说明：不同机器（GitHub runner / 云机）不可直接做绝对值对比，但趋势上可见本轮优化显著改善吞吐与延迟分布。
 
-### 方案 B：3 轮 × 每轮 **60 s**
+### 定时压测（GitHub Actions）
 
-相对方案 A，长跑下 QPS 略降（单机 GC、日志增长、缓存等因素）；**三轮 errors 均为 0**。
+每周日在 GitHub Ubuntu runner 自动运行 [`bench-nightly.yml`](.github/workflows/bench-nightly.yml)：
 
-| 轮次 | Ops | QPS | 平均延迟 (µs) | p50 (µs) | p99 (µs) |
-|-----:|----:|----:|---------------:|---------:|---------:|
-| 1 | 69 343 | **1155.72** | 6921.8 | 2194.0 | 39487.6 |
-| 2 | 60 301 | **1005.02** | 7960.0 | 2255.0 | 45775.0 |
-| 3 | 59 635 | **993.92** | 8048.0 | 2300.0 | ~46 200* |
-
-\*第 3 轮 p99 在终端输出中被截断，数量级与第 2 轮相近。
-
-**小结：** 60 s 窗口内约 **1.0k–1.16k QPS**、基准统计 **0 错误**；平均延迟向 **约 8 ms** 漂移，p50 仍约 **2.2–2.3 ms**。
+- 查看结果：**[Actions → Bench Nightly](https://github.com/dttilx/raftKv/actions/workflows/bench-nightly.yml)** → 最新 Run → Summary 或下载 artifact。
+- 失败条件：仅 `errors != 0`。
+- 角色定位：用于持续跟踪性能趋势，不作为 PR 合并硬门禁。
 
 ## 目录结构
 

@@ -13,10 +13,23 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build-and-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      CMAKE_BUILD_TYPE: RelWithDebInfo
+      RAFTKV_CLEAN_PERSIST: 1
+      RAFTKV_SMOKE_BENCH: 1
+      RAFTKV_CONSISTENCY_KEYS: 300
+      RAFTKV_BENCH_SECONDS: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -30,37 +43,45 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake -S . -B cmake-build -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
           cmake --build cmake-build -j"$(nproc)"
 
       - name: Unit tests
         run: |
+          set -euo pipefail
+          mkdir -p logs
           if [[ -x cmake-build/test/unit/raftkv_unit_tests ]]; then
-            ./cmake-build/test/unit/raftkv_unit_tests
+            ./cmake-build/test/unit/raftkv_unit_tests | tee logs/unit-tests.log
           elif [[ -x bin/raftkv_unit_tests ]]; then
-            ./bin/raftkv_unit_tests
+            ./bin/raftkv_unit_tests | tee logs/unit-tests.log
           else
-            cd cmake-build && ctest --output-on-failure
+            (cd cmake-build && ctest --output-on-failure) | tee logs/unit-tests.log
           fi
 
       - name: Smoke test (consistency + short bench)
         run: |
           chmod +x scripts/*.sh
-          export RAFTKV_CLEAN_PERSIST=1
-          export RAFTKV_SMOKE_BENCH=1
-          export RAFTKV_CONSISTENCY_KEYS=300
-          export RAFTKV_BENCH_SECONDS=5
-          ./scripts/smoke.sh
+          ./scripts/smoke.sh | tee logs/smoke.log
 
       - name: Chaos smoke (kill one node)
         run: |
-          export RAFTKV_CLEAN_PERSIST=1
-          ./scripts/smoke_chaos.sh
+          ./scripts/smoke_chaos.sh | tee logs/smoke-chaos.log
 
-      - name: Upload cluster log on failure
+      - name: Diagnose cluster on failure
         if: failure()
+        run: |
+          chmod +x scripts/*.sh
+          ./scripts/diagnose_cluster.sh | tee logs/diagnose.log
+
+      - name: Upload CI artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: cluster-log
-          path: logs/cluster.log
+          name: ci-logs-${{ github.run_id }}
+          path: |
+            logs/cluster.log
+            logs/unit-tests.log
+            logs/smoke.log
+            logs/smoke-chaos.log
+            logs/diagnose.log
           if-no-files-found: ignore
